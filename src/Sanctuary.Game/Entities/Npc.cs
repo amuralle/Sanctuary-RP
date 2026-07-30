@@ -77,7 +77,7 @@ public class Npc : IEntity
 
     #region Events
 
-    public void OnInteract(Player player)
+    public virtual void OnInteract(Player player)
     {
     }
 

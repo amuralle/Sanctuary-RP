@@ -64,7 +64,6 @@ public static class PacketChatHandler
             _logger.LogWarning("Received {name} packet with null message. ( {packet} )", nameof(PacketChat), packet);
             return false;
         }
-        
         if (packet.Message.StartsWith(_chatCommandManager.Prefix))
         {
             if (!_chatCommandManager.TryHandle(connection.Player, packet.Message))

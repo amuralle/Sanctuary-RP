@@ -60,3 +60,28 @@ and a 14-day local backup retention window.
 Public DNS must point the deployment hostname at the VPS with Cloudflare proxying
 disabled because the game login and gateway use UDP. The default hostname is
 `play.osfr-rp.com`.
+
+## Tabletop miniatures
+
+Every player can place session-only NPC miniatures for roleplay scenes. Miniatures
+inherit the player's position and facing, use short per-zone IDs, and can be
+organized into optional groups:
+
+```text
+!mini spawn 724 @enemies Skeletal Guard
+!mini models fossil
+!mini models * 2
+!mini list @enemies
+!mini info nearest
+!mini groups
+!mini remove #1
+!mini remove nearest 20
+!mini clear mine
+!mini clear @enemies
+!mini clear nearby 30
+!mini clear all
+```
+
+Clicking a miniature reports its ID, model, group, and original owner. Any player
+can remove any roleplay miniature, but these commands cannot remove built-in world
+NPCs, mounts, or collection nodes. A zone restart clears all miniatures.

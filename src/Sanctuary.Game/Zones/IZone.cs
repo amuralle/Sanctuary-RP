@@ -45,6 +45,16 @@ public interface IZone : IScriptZone
     bool TryRemoveNearestCollectionNodeSpawn(Vector4 position, float radius,
         [MaybeNullWhen(false)] out CollectionNodeSpawnDefinition removedSpawn);
     void CompleteCollectionNode(CollectionNode node);
+    IReadOnlyList<RoleplayMiniatureStatus> GetRoleplayMiniatureStatuses();
+    RoleplayMiniatureCreateResult TryCreateRoleplayMiniature(Player owner, int modelId, string name, string group,
+        out RoleplayMiniatureStatus? miniature);
+    bool TryRemoveRoleplayMiniature(int id, [MaybeNullWhen(false)] out RoleplayMiniatureStatus miniature);
+    bool TryRemoveNearestRoleplayMiniature(Vector4 position, float radius,
+        [MaybeNullWhen(false)] out RoleplayMiniatureStatus miniature);
+    int RemoveAllRoleplayMiniatures();
+    int RemoveRoleplayMiniaturesByOwner(ulong ownerGuid);
+    int RemoveRoleplayMiniaturesByGroup(string group);
+    int RemoveNearbyRoleplayMiniatures(Vector4 position, float radius);
     bool TryCreateMount(Player rider, MountDefinition definition, [MaybeNullWhen(false)] out Mount mount);
     bool TryCreatePlayer(ulong guid, UdpConnection connection, [MaybeNullWhen(false)] out Player player);
 

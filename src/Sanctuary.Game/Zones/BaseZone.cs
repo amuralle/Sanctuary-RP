@@ -38,6 +38,9 @@ public abstract class BaseZone : IZone, IDisposable
     private readonly ConcurrentDictionary<ulong, IEntity> _entities = new();
     private readonly object _collectionNodeLock = new();
     private readonly PriorityQueue<CollectionNodePoolRefill, long> _collectionNodeRefills = new();
+    private readonly object _roleplayMiniatureLock = new();
+    private readonly Dictionary<ulong, long> _roleplayMiniatureSpawnTimes = new();
+    private int _nextRoleplayMiniatureId = 1;
 
     private const int FrameRate = 10;
     private const float TickRate = 1000f / FrameRate;
@@ -517,6 +520,204 @@ public abstract class BaseZone : IZone, IDisposable
                     RefillCollectionNodePool(poolDefinition, 1, refill.CollectedHardPointId);
             }
         }
+    }
+
+    public IReadOnlyList<RoleplayMiniatureStatus> GetRoleplayMiniatureStatuses()
+    {
+        lock (_roleplayMiniatureLock)
+        {
+            return _npcs.Values
+                .OfType<RoleplayMiniature>()
+                .OrderBy(miniature => miniature.InstanceId)
+                .Select(ToRoleplayMiniatureStatus)
+                .ToArray();
+        }
+    }
+
+    public RoleplayMiniatureCreateResult TryCreateRoleplayMiniature(Player owner, int modelId, string name, string group,
+        out RoleplayMiniatureStatus? miniature)
+    {
+        lock (_roleplayMiniatureLock)
+        {
+            miniature = null;
+
+            if (!_resourceManager.Models.TryGetValue(modelId, out var model))
+                return RoleplayMiniatureCreateResult.InvalidModel;
+
+            name = name.Trim();
+            if (!RoleplayMiniatureRules.IsValidName(name))
+                return RoleplayMiniatureCreateResult.InvalidName;
+
+            if (!RoleplayMiniatureRules.TryNormalizeGroup(group, out var normalizedGroup))
+                return RoleplayMiniatureCreateResult.InvalidGroup;
+
+            var activeMiniatures = _npcs.Values.OfType<RoleplayMiniature>().ToArray();
+
+            if (activeMiniatures.Length >= RoleplayMiniatureRules.MaximumPerZone)
+                return RoleplayMiniatureCreateResult.ZoneLimitReached;
+
+            if (activeMiniatures.Count(candidate => candidate.OwnerGuid == owner.Guid) >=
+                RoleplayMiniatureRules.MaximumPerPlayer)
+            {
+                return RoleplayMiniatureCreateResult.PlayerLimitReached;
+            }
+
+            var now = Stopwatch.GetTimestamp();
+            var cooldownTicks = RoleplayMiniatureRules.SpawnCooldown.TotalSeconds * Stopwatch.Frequency;
+
+            if (_roleplayMiniatureSpawnTimes.TryGetValue(owner.Guid, out var previousSpawn) &&
+                now - previousSpawn < cooldownTicks)
+            {
+                return RoleplayMiniatureCreateResult.RateLimited;
+            }
+
+            var entity = new RoleplayMiniature(
+                this,
+                _nextRoleplayMiniatureId++,
+                owner.Guid,
+                owner.Name.FullName,
+                normalizedGroup)
+            {
+                Guid = GetNpcGuid(null),
+                Name = name,
+                ModelId = modelId,
+                Scale = model.Scale == 0f ? 1f : model.Scale,
+                VerticalOffset = model.NamePlateOffset,
+                CursorId = 18,
+                InteractRange = 15,
+                IsInteractable = true,
+                Static = true,
+                Visible = true
+            };
+
+            if (!_npcs.TryAdd(entity.Guid, entity))
+                return RoleplayMiniatureCreateResult.ZoneLimitReached;
+
+            if (!_entities.TryAdd(entity.Guid, entity))
+            {
+                _npcs.TryRemove(entity.Guid, out _);
+                return RoleplayMiniatureCreateResult.ZoneLimitReached;
+            }
+
+            entity.UpdatePosition(owner.Position, owner.Rotation);
+            _roleplayMiniatureSpawnTimes[owner.Guid] = now;
+            miniature = ToRoleplayMiniatureStatus(entity);
+            return RoleplayMiniatureCreateResult.Success;
+        }
+    }
+
+    public bool TryRemoveRoleplayMiniature(int id, [MaybeNullWhen(false)] out RoleplayMiniatureStatus miniature)
+    {
+        lock (_roleplayMiniatureLock)
+        {
+            var entity = _npcs.Values
+                .OfType<RoleplayMiniature>()
+                .FirstOrDefault(candidate => candidate.InstanceId == id);
+
+            if (entity is null)
+            {
+                miniature = null;
+                return false;
+            }
+
+            miniature = ToRoleplayMiniatureStatus(entity);
+            entity.DisposeFromScene();
+            return true;
+        }
+    }
+
+    public bool TryRemoveNearestRoleplayMiniature(Vector4 position, float radius,
+        [MaybeNullWhen(false)] out RoleplayMiniatureStatus miniature)
+    {
+        lock (_roleplayMiniatureLock)
+        {
+            var entity = FindNearbyRoleplayMiniatures(position, radius)
+                .OrderBy(candidate => DistanceSquared(candidate.Position, position))
+                .FirstOrDefault();
+
+            if (entity is null)
+            {
+                miniature = null;
+                return false;
+            }
+
+            miniature = ToRoleplayMiniatureStatus(entity);
+            entity.DisposeFromScene();
+            return true;
+        }
+    }
+
+    public int RemoveAllRoleplayMiniatures()
+    {
+        return RemoveRoleplayMiniatures(_ => true);
+    }
+
+    public int RemoveRoleplayMiniaturesByOwner(ulong ownerGuid)
+    {
+        return RemoveRoleplayMiniatures(miniature => miniature.OwnerGuid == ownerGuid);
+    }
+
+    public int RemoveRoleplayMiniaturesByGroup(string group)
+    {
+        if (!RoleplayMiniatureRules.TryNormalizeGroup(group, out var normalizedGroup))
+            return 0;
+
+        return RemoveRoleplayMiniatures(miniature => miniature.Group == normalizedGroup);
+    }
+
+    public int RemoveNearbyRoleplayMiniatures(Vector4 position, float radius)
+    {
+        if (radius <= 0)
+            return 0;
+
+        return RemoveRoleplayMiniatures(miniature =>
+            DistanceSquared(miniature.Position, position) <= radius * radius);
+    }
+
+    private int RemoveRoleplayMiniatures(Func<RoleplayMiniature, bool> predicate)
+    {
+        lock (_roleplayMiniatureLock)
+        {
+            var miniatures = _npcs.Values
+                .OfType<RoleplayMiniature>()
+                .Where(predicate)
+                .ToArray();
+
+            foreach (var miniature in miniatures)
+                miniature.DisposeFromScene();
+
+            return miniatures.Length;
+        }
+    }
+
+    private IEnumerable<RoleplayMiniature> FindNearbyRoleplayMiniatures(Vector4 position, float radius)
+    {
+        if (radius <= 0)
+            return [];
+
+        return _npcs.Values
+            .OfType<RoleplayMiniature>()
+            .Where(miniature => DistanceSquared(miniature.Position, position) <= radius * radius);
+    }
+
+    private static float DistanceSquared(Vector4 left, Vector4 right)
+    {
+        return Vector3.DistanceSquared(
+            new Vector3(left.X, left.Y, left.Z),
+            new Vector3(right.X, right.Y, right.Z));
+    }
+
+    private static RoleplayMiniatureStatus ToRoleplayMiniatureStatus(RoleplayMiniature miniature)
+    {
+        return new RoleplayMiniatureStatus(
+            miniature.InstanceId,
+            miniature.Guid,
+            miniature.ModelId,
+            miniature.Name ?? string.Empty,
+            miniature.Group,
+            miniature.OwnerGuid,
+            miniature.OwnerName,
+            miniature.Position);
     }
 
     public bool TryCreateMount(Player rider, MountDefinition definition, [MaybeNullWhen(false)] out Mount mount)
