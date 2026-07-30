@@ -37,3 +37,26 @@ The generated `roleplay.env` defaults all game services to localhost:
 Use `-RefreshServer` after changing roleplay source or resources. Internet hosting
 should use a separate public configuration after router, firewall, DNS, account
 security, and restore testing are complete.
+
+## Linux VPS
+
+The VPS deployment remains separate from the local Windows runtime. It publishes
+self-contained `linux-x64` services, installs them as systemd units, keeps MariaDB
+and WebAPI on loopback, and exposes the web edge plus the two public UDP game ports.
+
+From PowerShell:
+
+```powershell
+.\scripts\roleplay-vps\Deploy-RoleplayVps.ps1
+```
+
+The first deployment uploads the launcher-verified public client. It uses the
+official manifest as a file allowlist, then regenerates sizes and hashes from the
+hosted copy so launcher verification remains self-consistent. Later deployments
+reuse those files unless `-RefreshClient` is supplied. The remote installer also
+configures Caddy, authentication rate limits, a daily database and resource backup,
+and a 14-day local backup retention window.
+
+Public DNS must point the deployment hostname at the VPS with Cloudflare proxying
+disabled because the game login and gateway use UDP. The default hostname is
+`play.osfr-rp.com`.

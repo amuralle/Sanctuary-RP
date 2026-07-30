@@ -22,6 +22,9 @@ namespace Sanctuary.WebAPI.Endpoints;
 
 public static class AuthEndpoints
 {
+    public const string LoginRateLimitPolicy = "login";
+    public const string RegisterRateLimitPolicy = "register";
+
     private static ILogger _logger = null!;
 
     public static void MapAuthEndpoints(this WebApplication app)
@@ -30,8 +33,11 @@ public static class AuthEndpoints
 
         _logger = loggerFactory.CreateLogger(nameof(AuthEndpoints));
 
-        app.MapPost("/login", LoginHandlerAsync);
-        app.MapPost("/register", RegisterHandlerAsync);
+        app.MapPost("/login", LoginHandlerAsync)
+            .RequireRateLimiting(LoginRateLimitPolicy);
+
+        app.MapPost("/register", RegisterHandlerAsync)
+            .RequireRateLimiting(RegisterRateLimitPolicy);
     }
 
     private static async Task<IResult> LoginHandlerAsync(

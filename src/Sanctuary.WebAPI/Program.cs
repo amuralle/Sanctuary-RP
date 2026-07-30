@@ -1,8 +1,15 @@
+using System;
 using System.Globalization;
+using System.Net;
+using System.Threading.RateLimiting;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpLogging;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -24,8 +31,41 @@ builder.WebHost.UseUrls();
 // Proxy Server / Load Balancer
 var forwardedHeaderSection = builder.Configuration.GetSection("ForwardedHeadersOptions");
 
-if (forwardedHeaderSection is not null)
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+    options.KnownProxies.Add(IPAddress.Loopback);
+    options.KnownProxies.Add(IPAddress.IPv6Loopback);
+});
+
+if (forwardedHeaderSection.Exists())
     builder.Services.Configure<ForwardedHeadersOptions>(forwardedHeaderSection);
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy(AuthEndpoints.LoginRateLimitPolicy, context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+
+    options.AddPolicy(AuthEndpoints.RegisterRateLimitPolicy, context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+});
 
 // Options
 builder.Services.AddOptionsWithValidateOnStart<DatabaseOptions>()
@@ -68,6 +108,9 @@ app.UseHttpLogging();
 #endif
 
 // Configure the HTTP request pipeline.
+
+app.UseForwardedHeaders();
+app.UseRateLimiter();
 
 app.MapAuthEndpoints();
 app.MapPortraitEndpoints();
