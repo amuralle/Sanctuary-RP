@@ -85,3 +85,14 @@ organized into optional groups:
 Clicking a miniature reports its ID, model, group, and original owner. Any player
 can remove any roleplay miniature, but these commands cannot remove built-in world
 NPCs, mounts, or collection nodes. A zone restart clears all miniatures.
+
+The searchable model guide and complete CSV catalog can be regenerated from the
+current client resources:
+
+```powershell
+python scripts/roleplay-model-guide/Generate-RoleplayModelGuide.py `
+    --models src/Resources/Models.txt `
+    --npcs src/Resources/Npcs.json `
+    --pdf output/pdf/OSFR_Roleplay_Model_Field_Guide.pdf `
+    --csv output/model-catalog/OSFR_Roleplay_Model_Catalog.csv
+```
