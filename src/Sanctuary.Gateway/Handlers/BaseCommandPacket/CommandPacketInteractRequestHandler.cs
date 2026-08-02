@@ -188,6 +188,10 @@ public static class CommandPacketInteractRequestHandler
                     SendCollectionStart(connection, collectionMatch.Definition, ownedItemDefinitionIds);
                 }
             }
+            else
+            {
+                SendCollectionRewardToast(connection, clientItem, itemDefinition, node);
+            }
 
             return true;
         }
@@ -230,6 +234,28 @@ public static class CommandPacketInteractRequestHandler
             Index = entry.Index,
             Unknown = entry.Unknown,
             Collected = entry.Collected
+        });
+    }
+
+    private static void SendCollectionRewardToast(GatewayConnection connection, ClientItem clientItem,
+        ClientItemDefinition itemDefinition, CollectionNode node)
+    {
+        var notificationId = Environment.TickCount & int.MaxValue;
+
+        connection.SendTunneled(new RewardBundlePacket
+        {
+            SourceGuid = node.Guid ^ (uint)notificationId,
+            PlayerGuid = connection.Player.Guid,
+            IconId = itemDefinition.Icon.Id,
+            NameId = itemDefinition.NameId,
+            Quantity = 1,
+            EntryIconId = itemDefinition.Icon.Id,
+            EntryNameId = itemDefinition.NameId,
+            EntryQuantity = 1,
+            ItemDefinitionId = clientItem.Definition,
+            Tint = clientItem.Tint,
+            ItemGuid = notificationId,
+            EntryUnknown5 = itemDefinition.DescriptionId
         });
     }
 }
