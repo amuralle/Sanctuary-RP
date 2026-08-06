@@ -40,6 +40,7 @@ public abstract class BaseZone : IZone, IDisposable
     private readonly PriorityQueue<CollectionNodePoolRefill, long> _collectionNodeRefills = new();
     private readonly object _roleplayMiniatureLock = new();
     private readonly Dictionary<ulong, long> _roleplayMiniatureSpawnTimes = new();
+    private readonly Dictionary<ulong, long> _roleplayMiniatureSpeechTimes = new();
     private int _nextRoleplayMiniatureId = 1;
 
     private const int FrameRate = 10;
@@ -458,6 +459,7 @@ public abstract class BaseZone : IZone, IDisposable
         {
             Guid = _nextNpcGuid++,
             Name = typeDefinition.Name,
+            SubTextNameId = typeDefinition.SubTextNameId,
             ModelId = typeDefinition.ModelId,
             Scale = typeDefinition.Scale,
             CompositeEffectId = typeDefinition.CompositeEffectId,
@@ -471,6 +473,26 @@ public abstract class BaseZone : IZone, IDisposable
             return false;
 
         node.UpdatePosition(spawnDefinition.SpawnPosition, spawnDefinition.SpawnRotation);
+
+        foreach (var effectId in typeDefinition.ExtraCompositeEffectIds)
+        {
+            if (!TryCreateNpc(null, out var anchor))
+                continue;
+
+            anchor.Name = typeDefinition.Name;
+            anchor.ModelId = typeDefinition.ModelId;
+            anchor.Scale = typeDefinition.Scale;
+            anchor.CompositeEffectId = effectId;
+            anchor.HideNamePlate = true;
+            anchor.IsInteractable = false;
+            anchor.InteractRange = 0;
+            anchor.CursorId = 0;
+            anchor.Static = true;
+            anchor.Visible = true;
+            anchor.UpdatePosition(spawnDefinition.SpawnPosition, spawnDefinition.SpawnRotation);
+            node.AddEffectAnchor(anchor);
+        }
+
         return true;
     }
 
@@ -623,6 +645,40 @@ public abstract class BaseZone : IZone, IDisposable
             miniature = ToRoleplayMiniatureStatus(entity);
             entity.DisposeFromScene();
             return true;
+        }
+    }
+
+    public RoleplayMiniatureSpeakResult TrySpeakRoleplayMiniature(int id, ulong actorGuid, string message,
+        [MaybeNullWhen(false)] out RoleplayMiniatureStatus miniature)
+    {
+        lock (_roleplayMiniatureLock)
+        {
+            miniature = null!;
+
+            if (!RoleplayMiniatureRules.IsValidSpeech(message))
+                return RoleplayMiniatureSpeakResult.InvalidMessage;
+
+            var entity = _npcs.Values
+                .OfType<RoleplayMiniature>()
+                .FirstOrDefault(candidate => candidate.InstanceId == id);
+
+            if (entity is null)
+                return RoleplayMiniatureSpeakResult.NotFound;
+
+            var now = Stopwatch.GetTimestamp();
+            var cooldownTicks = RoleplayMiniatureRules.SpeechCooldown.TotalSeconds * Stopwatch.Frequency;
+
+            if (_roleplayMiniatureSpeechTimes.TryGetValue(actorGuid, out var previousSpeech) &&
+                now - previousSpeech < cooldownTicks)
+            {
+                return RoleplayMiniatureSpeakResult.RateLimited;
+            }
+
+            message = message.Trim();
+            _roleplayMiniatureSpeechTimes[actorGuid] = now;
+            miniature = ToRoleplayMiniatureStatus(entity);
+            entity.Speak(message);
+            return RoleplayMiniatureSpeakResult.Success;
         }
     }
 

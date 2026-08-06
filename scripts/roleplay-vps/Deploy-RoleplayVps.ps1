@@ -1,6 +1,7 @@
 param(
     [string] $SshHost = 'osfr-rp',
     [string] $Domain = 'play.osfr-rp.com',
+    [string] $WebsiteDomain = 'www.osfr-rp.com',
     [string] $ClientRoot = "$env:LOCALAPPDATA\OSFRLauncher\Servers\OSFR Public Server\Client",
     [switch] $SkipClientUpload,
     [switch] $RefreshClient
@@ -11,6 +12,10 @@ $ErrorActionPreference = 'Stop'
 
 if ($Domain -notmatch '^[a-zA-Z0-9.-]+$') {
     throw "Invalid deployment domain: $Domain"
+}
+
+if ($WebsiteDomain -notmatch '^[a-zA-Z0-9.-]+$') {
+    throw "Invalid website domain: $WebsiteDomain"
 }
 
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
@@ -73,6 +78,23 @@ try {
         -Recurse `
         -Force
 
+    Copy-Item `
+        -Path (Join-Path $repositoryRoot 'site') `
+        -Destination (Join-Path $releaseRoot 'site') `
+        -Recurse `
+        -Force
+
+    $downloadPath = Join-Path $releaseRoot 'site\downloads'
+    New-Item -ItemType Directory -Path $downloadPath -Force | Out-Null
+    Copy-Item `
+        -LiteralPath (Join-Path $repositoryRoot 'output\pdf\OSFR_Roleplay_Model_Field_Guide.pdf') `
+        -Destination $downloadPath `
+        -Force
+    Copy-Item `
+        -LiteralPath (Join-Path $repositoryRoot 'output\model-catalog\OSFR_Roleplay_Model_Catalog.csv') `
+        -Destination $downloadPath `
+        -Force
+
     & tar -cf $releaseArchive -C $releaseRoot .
     if ($LASTEXITCODE -ne 0) {
         throw 'Creating the release archive failed.'
@@ -91,7 +113,7 @@ try {
         throw 'Uploading the release installer failed.'
     }
 
-    & ssh $SshHost "chmod 700 '$remoteInstaller' && sudo '$remoteInstaller' '$remoteArchive' '$releaseId' '$Domain'"
+    & ssh $SshHost "chmod 700 '$remoteInstaller' && sudo '$remoteInstaller' '$remoteArchive' '$releaseId' '$Domain' '$WebsiteDomain'"
     if ($LASTEXITCODE -ne 0) {
         throw 'Installing the release failed.'
     }

@@ -1,0 +1,100 @@
+[
+  {
+    "id": "help",
+    "task": "Show command help",
+    "syntax": "!mini help",
+    "example": "!mini help",
+    "description": "Lists the miniature commands available in game."
+  },
+  {
+    "id": "spawn",
+    "task": "Place a miniature",
+    "syntax": "!mini spawn [modelId] [@group] [name]",
+    "example": "!mini spawn 176 @enemies Briar Wolf",
+    "description": "Places a named model at your current position and facing. The group is optional and defaults to @scene."
+  },
+  {
+    "id": "models",
+    "task": "Search model IDs",
+    "syntax": "!mini models [search|*] [page]",
+    "example": "!mini models wolf 2",
+    "description": "Searches client model filenames, descriptions, and descriptors. Use * to browse the complete catalog."
+  },
+  {
+    "id": "list",
+    "task": "List placed miniatures",
+    "syntax": "!mini list [all|mine|@group] [page]",
+    "example": "!mini list @enemies",
+    "description": "Shows the short IDs used by info, speech, and removal commands in the current zone."
+  },
+  {
+    "id": "info",
+    "task": "Inspect a miniature",
+    "syntax": "!mini info [#id|nearest]",
+    "example": "!mini info nearest",
+    "description": "Reports the model, group, owner, and distance for a placed miniature."
+  },
+  {
+    "id": "say",
+    "task": "Speak through a miniature",
+    "syntax": "!mini say [#id|nearest] [message]",
+    "example": "!mini say #3 You shall not pass!",
+    "description": "Sends local chat from the miniature so nearby players see its name and speech bubble."
+  },
+  {
+    "id": "groups",
+    "task": "Summarize scene groups",
+    "syntax": "!mini groups",
+    "example": "!mini groups",
+    "description": "Lists each group in the current zone and how many miniatures it contains."
+  },
+  {
+    "id": "remove",
+    "task": "Remove one miniature",
+    "syntax": "!mini remove [#id|nearest] [radius]",
+    "example": "!mini remove nearest 20",
+    "description": "Removes a player-created miniature by short ID or finds the nearest one within an optional radius."
+  },
+  {
+    "id": "clear",
+    "task": "Clean up a scene",
+    "syntax": "!mini clear [all|mine|@group|nearby] [radius]",
+    "example": "!mini clear @enemies",
+    "description": "Removes a selected set of player-created miniatures. It never removes normal world NPCs."
+  },
+  {
+    "id": "volunteer-help",
+    "task": "Show survey help",
+    "syntax": "!volunteer help",
+    "example": "!volunteer help",
+    "description": "Lists the collection volunteer commands available in game."
+  },
+  {
+    "id": "volunteer-pools",
+    "task": "List survey pools",
+    "syntax": "!volunteer pools",
+    "example": "!volunteer pools",
+    "description": "Lists the collection pools configured in your current zone and available for volunteer surveying."
+  },
+  {
+    "id": "volunteer-place",
+    "task": "Submit a hardpoint",
+    "syntax": "!volunteer place [pool] [optional note]",
+    "example": "!volunteer place blackspore-fossils beside the broken bridge",
+    "description": "Records your exact position and facing for review and creates a linked collectible node immediately."
+  },
+  {
+    "id": "volunteer-mine",
+    "task": "Review your submissions",
+    "syntax": "!volunteer mine [page]",
+    "example": "!volunteer mine",
+    "description": "Lists your submitted hardpoints and their pending, accepted, or rejected review status."
+  },
+  {
+    "id": "volunteer-undo",
+    "task": "Undo a pending submission",
+    "syntax": "!volunteer undo [#id|last]",
+    "example": "!volunteer undo last",
+    "description": "Removes one of your pending submissions before it has been reviewed."
+  }
+]

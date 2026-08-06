@@ -20,6 +20,19 @@
     <ProjectReference Include="..\Sanctuary.Core\Sanctuary.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\..\site\data\models.json">
+      <Link>CatalogModels.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\Resources\CollectionNodeSpawns\**\*.json">
+      <Link>CollectionNodeSpawns\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
   <ItemGroup Condition="'$(Configuration)'=='Release'">
     <None Remove="NLog.Development.config" />
     <Content Remove="NLog.Development.config" />

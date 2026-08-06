@@ -11,6 +11,8 @@ namespace Sanctuary.Game.Entities;
 
 public class Npc : IEntity
 {
+    private readonly object _visiblePlayersLock = new();
+
     public ulong Guid { get; init; }
 
     public Vector4 Position { get; private set; }
@@ -89,8 +91,11 @@ public class Npc : IEntity
 
     public virtual void OnAddVisiblePlayers(params IEnumerable<Player> players)
     {
-        foreach (var player in players)
-            VisiblePlayers.TryAdd(player.Guid, player);
+        lock (_visiblePlayersLock)
+        {
+            foreach (var player in players)
+                VisiblePlayers[player.Guid] = player;
+        }
     }
 
     public virtual void OnRemoveVisibleNpcs(params IEnumerable<Npc> npcs)
@@ -101,8 +106,17 @@ public class Npc : IEntity
 
     public virtual void OnRemoveVisiblePlayers(params IEnumerable<Player> players)
     {
-        foreach (var player in players)
-            VisiblePlayers.TryRemove(player.Guid, out _);
+        lock (_visiblePlayersLock)
+        {
+            foreach (var player in players)
+            {
+                if (VisiblePlayers.TryGetValue(player.Guid, out var visiblePlayer) &&
+                    ReferenceEquals(visiblePlayer, player))
+                {
+                    VisiblePlayers.TryRemove(player.Guid, out _);
+                }
+            }
+        }
     }
 
     #endregion

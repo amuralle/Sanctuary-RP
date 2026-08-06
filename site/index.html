@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="OSFR Roleplay model catalog, collection survey, and command reference.">
+  <title>OSFR Roleplay Toolkit</title>
+  <link rel="icon" type="image/png" href="assets/catalog-header.png">
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-shade"></div>
+    <div class="header-inner">
+      <div class="identity">
+        <span class="identity-mark" aria-hidden="true">OS</span>
+        <div>
+          <p class="eyebrow">OSFR Roleplay</p>
+          <h1>Roleplay Toolkit</h1>
+        </div>
+      </div>
+      <div class="header-actions">
+        <p class="header-summary">Find a client model, copy its spawn command, and build a scene in game.</p>
+        <div class="account-controls">
+          <span id="account-name" hidden></span>
+          <button id="account-login" class="header-button" type="button">Sign in to contribute</button>
+          <button id="account-logout" class="header-button" type="button" hidden>Sign out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="view-tabs" aria-label="Catalog views">
+    <div class="content-width tab-inner">
+      <button class="tab-button active" type="button" data-view="models" aria-selected="true">Models</button>
+      <button class="tab-button" type="button" data-view="collections" aria-selected="false">Collection Map</button>
+      <button class="tab-button" type="button" data-view="commands" aria-selected="false">Commands</button>
+      <button class="tab-button" type="button" data-view="server" aria-selected="false">Server</button>
+    </div>
+  </nav>
+
+  <main>
+    <section class="view active" id="models-view" data-view-panel="models">
+      <div class="catalog-toolbar">
+        <div class="content-width toolbar-grid">
+          <label class="search-field">
+            <span>Search models</span>
+            <input id="model-search" type="search" placeholder="wolf, merchant, chest, 176..." autocomplete="off">
+          </label>
+          <label>
+            <span>Category</span>
+            <select id="category-filter">
+              <option value="">All categories</option>
+            </select>
+          </label>
+          <label>
+            <span>Roleplay fit</span>
+            <select id="fit-filter">
+              <option value="">Any fit</option>
+              <option value="Good candidate">Good candidate</option>
+              <option value="Test scale/behavior">Test scale or behavior</option>
+              <option value="Experimental">Experimental</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div class="content-width catalog-layout">
+        <section class="results-region" aria-labelledby="results-heading">
+          <div class="results-heading">
+            <div>
+              <p class="eyebrow">Client assets</p>
+              <h2 id="results-heading">Available models</h2>
+            </div>
+            <p id="result-count" aria-live="polite">Loading catalog...</p>
+          </div>
+          <div id="model-results" class="model-list" aria-live="polite"></div>
+          <button id="load-more" class="secondary-button" type="button" hidden>Load more</button>
+        </section>
+
+        <aside class="model-detail" id="model-detail" aria-labelledby="detail-title">
+          <div class="preview-frame">
+            <img id="detail-image" alt="" hidden>
+            <div id="detail-placeholder" class="preview-placeholder">
+              <span>Preview not photographed yet</span>
+            </div>
+          </div>
+          <div class="image-contribution">
+            <p id="image-credit" class="image-credit" hidden></p>
+            <button id="choose-image" class="secondary-button" type="button">Add model image</button>
+            <input id="image-file" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+            <p class="upload-limits">One image per model. JPEG, PNG, or WebP up to 4 MB; stored at no more than 1280 by 960 and 512 KB.</p>
+          </div>
+          <p class="eyebrow" id="detail-category">Select a model</p>
+          <h2 id="detail-title">Model details</h2>
+          <p id="detail-context" class="detail-context">Choose a row to inspect its client metadata and prepare a spawn command.</p>
+          <dl id="detail-metadata" class="metadata-list"></dl>
+          <div class="command-builder" id="command-builder" hidden>
+            <label>
+              <span>Miniature name</span>
+              <input id="spawn-name" type="text" maxlength="40">
+            </label>
+            <label>
+              <span>Group</span>
+              <input id="spawn-group" type="text" maxlength="24" value="scene">
+            </label>
+            <code id="spawn-command"></code>
+            <button id="copy-spawn" class="primary-button" type="button">Copy spawn command</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="view" id="collections-view" data-view-panel="collections" hidden>
+      <div class="collection-toolbar">
+        <div class="content-width toolbar-grid collection-filter-grid">
+          <label>
+            <span>Zone</span>
+            <select id="volunteer-zone-filter">
+              <option value="">All zones</option>
+            </select>
+          </label>
+          <label>
+            <span>Collection pool</span>
+            <select id="volunteer-pool-filter">
+              <option value="">All pools</option>
+            </select>
+          </label>
+          <label>
+            <span>Review status</span>
+            <select id="volunteer-status-filter">
+              <option value="">Any status</option>
+              <option value="pending">Pending</option>
+              <option value="accepted">Accepted</option>
+              <option value="rejected">Rejected</option>
+              <option value="deployed">Deployed</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div class="content-width collection-workspace">
+        <div class="section-heading">
+          <p class="eyebrow">Community archaeology</p>
+          <h2>Collection hardpoint survey</h2>
+          <p>Stand where a collection node belongs and submit the location in game. The collectible node appears immediately while the placement remains in the review queue.</p>
+        </div>
+
+        <div class="collection-summary" aria-live="polite">
+          <div><strong id="volunteer-visible-count">0</strong><span>shown</span></div>
+          <div><strong id="volunteer-pending-count">0</strong><span>pending</span></div>
+          <div><strong id="volunteer-accepted-count">0</strong><span>accepted</span></div>
+          <div><strong id="volunteer-deployed-count">0</strong><span>deployed</span></div>
+        </div>
+
+        <div class="volunteer-command-band">
+          <div>
+            <h3>Submit from your position</h3>
+            <p>Run <code>!volunteer pools</code>, then use the pool key at a suitable hardpoint.</p>
+          </div>
+          <code>!volunteer place [pool] [optional note]</code>
+        </div>
+
+        <div class="collection-map-layout">
+          <section class="coordinate-map" aria-labelledby="coordinate-map-heading">
+            <div class="map-heading">
+              <div>
+                <h3 id="coordinate-map-heading">X/Z placement plot</h3>
+                <p id="volunteer-map-caption">Choose one zone to compare locations.</p>
+              </div>
+              <span class="map-axis-key">Client minimap / X-Z</span>
+            </div>
+            <svg id="volunteer-map" viewBox="0 0 800 480" role="img" aria-label="Collection placement coordinate plot"></svg>
+          </section>
+
+          <section class="submission-panel" aria-labelledby="submission-heading">
+            <div class="results-heading compact-heading">
+              <div>
+                <p class="eyebrow">Placement queue</p>
+                <h3 id="submission-heading">Submitted hardpoints</h3>
+              </div>
+            </div>
+            <div class="submission-table-wrap">
+              <table class="submission-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Zone / pool</th>
+                    <th>Position</th>
+                    <th>Contributor</th>
+                    <th>Status</th>
+                    <th><span class="visually-hidden">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody id="volunteer-placements"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <section class="collection-guide" aria-labelledby="collection-guide-heading">
+          <div class="section-heading compact-section-heading">
+            <p class="eyebrow">In-game field guide</p>
+            <h3 id="collection-guide-heading">Collection placement commands</h3>
+            <p>These commands are available to every player. Enter them in normal chat with an exclamation point, not as slash commands.</p>
+          </div>
+
+          <div class="collection-guide-grid">
+            <div>
+              <h4>Command reference</h4>
+              <dl class="collection-command-list">
+                <div>
+                  <dt><code>!volunteer help</code></dt>
+                  <dd>Shows the collection volunteer commands in game.</dd>
+                </div>
+                <div>
+                  <dt><code>!volunteer pools</code></dt>
+                  <dd>Lists the exact pool keys available in your current zone.</dd>
+                </div>
+                <div>
+                  <dt><code>!volunteer place [pool] [optional note]</code></dt>
+                  <dd>Saves your position, height, and facing. A linked collectible node appears immediately so you can inspect the placement.</dd>
+                </div>
+                <div>
+                  <dt><code>!volunteer mine [page]</code></dt>
+                  <dd>Lists your submissions eight at a time, including each submission ID and review status.</dd>
+                </div>
+                <div>
+                  <dt><code>!volunteer undo [#id|last]</code></dt>
+                  <dd>Removes one of your pending submissions and its linked live node. Use <code>last</code> to undo your newest placement.</dd>
+                </div>
+              </dl>
+            </div>
+
+            <div class="collection-field-workflow">
+              <h4>Placement workflow</h4>
+              <ol>
+                <li>Move to the exact spot where the center of the collection node should sit.</li>
+                <li>Confirm the ground is reachable and the node will not be hidden inside terrain or scenery.</li>
+                <li>Run <code>!volunteer pools</code> and choose the regular or rare pool for that region.</li>
+                <li>Place the node with an optional landmark note, then inspect and collect it in game.</li>
+                <li>Use <code>!volunteer undo last</code> immediately if the height, position, or pool is wrong.</li>
+                <li>Refresh this page and select the pool to verify the new marker on the regional map.</li>
+              </ol>
+
+              <h4>Current collection groups</h4>
+              <p class="current-pool-intro">These groups are live for volunteer placement now. Copy the pool key exactly as shown.</p>
+              <table class="collection-pool-table">
+                <thead>
+                  <tr><th>Region</th><th>Regular</th><th>Rare</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Briarwood</td>
+                    <td><code>briarwood-mushrooms</code></td>
+                    <td><code>briarwood-mushrooms-rare</code></td>
+                  </tr>
+                  <tr>
+                    <td>Blackspore</td>
+                    <td><code>blackspore-fossils</code></td>
+                    <td><code>blackspore-fossils-rare</code></td>
+                  </tr>
+                  <tr>
+                    <td>Stillwater (water)</td>
+                    <td><code>stillwater-sparkling-water</code></td>
+                    <td><code>stillwater-sparkling-water-rare</code></td>
+                  </tr>
+                  <tr>
+                    <td>Stillwater (flowers)</td>
+                    <td><code>stillwater-flowers</code></td>
+                    <td><code>stillwater-flowers-rare</code></td>
+                  </tr>
+                  <tr>
+                    <td>Stillwater (junk)</td>
+                    <td><code>stillwater-robgoblin-junk</code></td>
+                    <td><code>stillwater-robgoblin-junk-rare</code></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="collection-guide-notes">
+            <p><strong>Regular versus rare:</strong> Use rare pools for deliberately scarce, harder-to-reach hardpoints. They are reviewed and tuned separately from regular locations.</p>
+            <p><strong>Submission safeguards:</strong> Matching locations within 1.5 units are rejected, placements have a two-second cooldown, and notes are limited to 200 characters.</p>
+            <p><strong>Status:</strong> Pending locations await review; accepted locations passed review; rejected locations need replacement; deployed entries already exist in server configuration.</p>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="view" id="commands-view" data-view-panel="commands" hidden>
+      <div class="content-width documentation">
+        <div class="section-heading">
+          <p class="eyebrow">In-game reference</p>
+          <h2>Roleplay commands</h2>
+          <p>Miniature and collection survey commands are available to every player. Miniature short IDs reset when the zone or server restarts.</p>
+        </div>
+        <div id="command-list" class="command-list"></div>
+        <section class="usage-notes">
+          <h3>Scene workflow</h3>
+          <ol>
+            <li>Search here or run <code>!mini models [term]</code> to find a model ID.</li>
+            <li>Place related pieces in a named group such as <code>@guards</code> or <code>@props</code>.</li>
+            <li>Use <code>!mini list @group</code> to find short IDs for speech, inspection, and removal.</li>
+            <li>Clean up with <code>!mini clear @group</code> when the scene ends.</li>
+          </ol>
+        </section>
+      </div>
+    </section>
+
+    <section class="view" id="server-view" data-view-panel="server" hidden>
+      <div class="content-width server-view">
+        <div class="section-heading">
+          <p class="eyebrow">OSFR Roleplay</p>
+          <h2>Server reference</h2>
+          <p>Useful catalog and community numbers, plus downloadable offline references.</p>
+        </div>
+        <div class="stat-grid">
+          <div class="stat">
+            <strong id="stat-models">-</strong>
+            <span>client models</span>
+          </div>
+          <div class="stat">
+            <strong id="stat-aliases">-</strong>
+            <span>models with known NPC aliases</span>
+          </div>
+          <div class="stat">
+            <strong id="stat-accounts">-</strong>
+            <span>registered accounts</span>
+          </div>
+          <div class="stat">
+            <strong id="stat-characters">-</strong>
+            <span>created characters</span>
+          </div>
+        </div>
+        <div class="server-band">
+          <div>
+            <h3>Service status</h3>
+            <p id="service-status" class="status-line"><span class="status-dot"></span>Checking the web API...</p>
+            <p class="muted">This status confirms the registration API is reachable. Live player count is not exposed yet.</p>
+          </div>
+          <div>
+            <h3>Scene limits</h3>
+            <p><strong>40</strong> miniatures per player, <strong>200</strong> per zone, with a short placement cooldown.</p>
+          </div>
+        </div>
+        <div class="download-row">
+          <a class="primary-button link-button" href="downloads/OSFR_Roleplay_Model_Field_Guide.pdf">Download PDF guide</a>
+          <a class="secondary-button link-button" href="downloads/OSFR_Roleplay_Model_Catalog.csv">Download catalog CSV</a>
+        </div>
+        <section class="image-roadmap">
+          <h3>Model previews</h3>
+          <p>Players can sign in with their game account and add one preview image per model. New uploads replace the existing image, are automatically resized for the web, and credit the account that last updated them.</p>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="login-dialog" class="login-dialog">
+    <form id="login-form">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">Game account</p>
+          <h2>Sign in to contribute</h2>
+        </div>
+        <button id="close-login" class="dialog-close" type="button">Close</button>
+      </div>
+      <p class="muted">Use the same username and password as the OSFR Roleplay launcher. Website sign-in does not affect an active game session.</p>
+      <label>
+        <span>Username</span>
+        <input id="login-username" name="username" type="text" autocomplete="username" required>
+      </label>
+      <label>
+        <span>Password</span>
+        <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+      </label>
+      <p id="login-error" class="form-error" role="alert" hidden></p>
+      <button id="login-submit" class="primary-button" type="submit">Sign in</button>
+    </form>
+  </dialog>
+
+  <dialog id="volunteer-edit-dialog" class="login-dialog volunteer-edit-dialog">
+    <form id="volunteer-edit-form">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">Collection survey</p>
+          <h2 id="volunteer-edit-title">Edit submission</h2>
+        </div>
+        <button id="volunteer-edit-close" class="dialog-close" type="button">Close</button>
+      </div>
+      <div class="coordinate-fields">
+        <label><span>Pool</span><input id="volunteer-edit-pool" maxlength="64" required></label>
+        <label><span>X</span><input id="volunteer-edit-x" type="number" step="0.01" required></label>
+        <label><span>Y</span><input id="volunteer-edit-y" type="number" step="0.01" required></label>
+        <label><span>Z</span><input id="volunteer-edit-z" type="number" step="0.01" required></label>
+        <label><span>Heading</span><input id="volunteer-edit-heading" type="number" step="0.001" required></label>
+      </div>
+      <label>
+        <span>Placement note</span>
+        <input id="volunteer-edit-note" maxlength="200" placeholder="Landmark, access route, or placement concern">
+      </label>
+      <label id="volunteer-status-field">
+        <span>Review status</span>
+        <select id="volunteer-edit-status">
+          <option value="pending">Pending</option>
+          <option value="accepted">Accepted</option>
+          <option value="rejected">Rejected</option>
+        </select>
+      </label>
+      <p id="volunteer-edit-error" class="form-error" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button id="volunteer-delete" class="danger-button" type="button">Delete</button>
+        <button id="volunteer-save" class="primary-button" type="submit">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

@@ -1,88 +1,88 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Numerics;
 
-using Microsoft.Extensions.Logging;
-
-using Sanctuary.Game;
+using Sanctuary.Game.Entities;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Game.Zones;
-using Sanctuary.Gateway.Helpers;
 
-namespace Sanctuary.Gateway.Handlers;
+namespace Sanctuary.Game.ChatCommands;
 
-public static class RoleplayCommandRegistry
+public sealed class RoleplayMiniatureChatCommand : IChatCommand
 {
     private const int ListPageSize = 8;
     private const int ModelPageSize = 6;
     private const float DefaultRemovalRadius = 15f;
     private const float MaximumRemovalRadius = 100f;
 
-    private static IResourceManager _resourceManager = null!;
-    private static ILogger _logger = null!;
+    private readonly IChatCommandManager _chatCommandManager;
+    private readonly IResourceManager _resourceManager;
 
-    public static void Initialize(IResourceManager resourceManager, ILogger logger)
+    public string KeyWord => "mini";
+    public string Usage => "help | spawn | models | list | info | say | groups | remove | clear";
+    public string Description => "Manage shared roleplay miniatures.";
+    public ChatCommandRole RequiredRole => ChatCommandRole.Player;
+
+    public RoleplayMiniatureChatCommand(IChatCommandManager chatCommandManager, IResourceManager resourceManager)
     {
+        _chatCommandManager = chatCommandManager;
         _resourceManager = resourceManager;
-        _logger = logger;
     }
 
-    public static bool IsCommand(string message)
+    public bool Handle(Player invoker, string[] args)
     {
-        return message.Equals("!mini", StringComparison.OrdinalIgnoreCase) ||
-            message.StartsWith("!mini ", StringComparison.OrdinalIgnoreCase);
-    }
-
-    public static void HandleCommand(GatewayConnection connection, string message)
-    {
-        var tokens = message.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (tokens.Length == 1)
+        if (args.Length == 0)
         {
-            SendHelp(connection);
-            return;
+            SendHelp(invoker);
+            return true;
         }
 
-        var args = tokens[2..];
+        var commandArgs = args[1..];
 
-        switch (tokens[1].ToLowerInvariant())
+        switch (args[0].ToLowerInvariant())
         {
             case "help":
-                SendHelp(connection);
+                SendHelp(invoker);
                 break;
             case "spawn":
-                Spawn(connection, args);
+                Spawn(invoker, commandArgs);
                 break;
             case "models":
-                ListModels(connection, args);
+                ListModels(invoker, commandArgs);
                 break;
             case "list":
-                ListMiniatures(connection, args);
+                ListMiniatures(invoker, commandArgs);
                 break;
             case "info":
-                ShowInfo(connection, args);
+                ShowInfo(invoker, commandArgs);
+                break;
+            case "say":
+                Say(invoker, commandArgs);
                 break;
             case "groups":
-                ListGroups(connection);
+                ListGroups(invoker);
                 break;
             case "remove":
-                Remove(connection, args);
+                Remove(invoker, commandArgs);
                 break;
             case "clear":
-                Clear(connection, args);
+                Clear(invoker, commandArgs);
                 break;
             default:
-                SendSystemMessage(connection, "Unknown miniature command. Type !mini help.");
-                break;
+                return false;
         }
+
+        return true;
     }
 
-    private static void Spawn(GatewayConnection connection, string[] args)
+    private void Spawn(Player invoker, string[] args)
     {
         if (args.Length < 2 || !int.TryParse(args[0], out var modelId))
         {
-            SendSystemMessage(connection, "Usage: !mini spawn [modelId] [@group] [name]");
+            SendSystemMessage(invoker, "Usage: !mini spawn [modelId] [@group] [name]");
             return;
         }
 
@@ -93,7 +93,7 @@ public static class RoleplayCommandRegistry
         {
             if (args.Length < 3)
             {
-                SendSystemMessage(connection, "Usage: !mini spawn [modelId] [@group] [name]");
+                SendSystemMessage(invoker, "Usage: !mini spawn [modelId] [@group] [name]");
                 return;
             }
 
@@ -102,17 +102,17 @@ public static class RoleplayCommandRegistry
         }
 
         var name = string.Join(' ', args[nameStart..]);
-        var result = connection.Player.Zone.TryCreateRoleplayMiniature(
-            connection.Player, modelId, name, group, out var miniature);
+        var result = invoker.Zone.TryCreateRoleplayMiniature(
+            invoker, modelId, name, group, out var miniature);
 
         if (result != RoleplayMiniatureCreateResult.Success || miniature is null)
         {
-            SendSystemMessage(connection, GetCreateFailureMessage(result));
+            SendSystemMessage(invoker, GetCreateFailureMessage(result));
             return;
         }
 
-        LogAction(connection, "Spawn", miniature);
-        SendSystemMessage(connection,
+        LogAction(invoker, "Spawn", miniature);
+        SendSystemMessage(invoker,
             $"Spawned #{miniature.Id} {miniature.Name} (model {miniature.ModelId}) in @{miniature.Group}.");
     }
 
@@ -136,7 +136,7 @@ public static class RoleplayCommandRegistry
         };
     }
 
-    private static void ListModels(GatewayConnection connection, string[] args)
+    private void ListModels(Player invoker, string[] args)
     {
         var page = 1;
         var queryArgs = args;
@@ -149,7 +149,7 @@ public static class RoleplayCommandRegistry
 
         if (page < 1)
         {
-            SendSystemMessage(connection, "Model page must be a positive number.");
+            SendSystemMessage(invoker, "Model page must be a positive number.");
             return;
         }
 
@@ -180,7 +180,7 @@ public static class RoleplayCommandRegistry
 
         if (page > pageCount || results.Length == 0)
         {
-            SendSystemMessage(connection, results.Length == 0
+            SendSystemMessage(invoker, results.Length == 0
                 ? $"No models matched \"{query}\"."
                 : $"There is no model page {page}; last page is {pageCount}.");
             return;
@@ -192,16 +192,16 @@ public static class RoleplayCommandRegistry
             .Select(model => $"{model.Id}: {Path.GetFileName(model.ModelFileName)}")
             .ToArray();
 
-        SendSystemMessage(connection,
+        SendSystemMessage(invoker,
             $"Models {page}/{pageCount}{(query.Length > 0 ? $" for \"{query}\"" : string.Empty)}:\n" +
             string.Join('\n', entries));
     }
 
-    private static void ListMiniatures(GatewayConnection connection, string[] args)
+    private void ListMiniatures(Player invoker, string[] args)
     {
         if (args.Length > 2)
         {
-            SendSystemMessage(connection, "Usage: !mini list [all|mine|@group] [page]");
+            SendSystemMessage(invoker, "Usage: !mini list [all|mine|@group] [page]");
             return;
         }
 
@@ -218,21 +218,21 @@ public static class RoleplayCommandRegistry
 
             if (args.Length == 2 && !int.TryParse(args[1], out page))
             {
-                SendSystemMessage(connection, "Usage: !mini list [all|mine|@group] [page]");
+                SendSystemMessage(invoker, "Usage: !mini list [all|mine|@group] [page]");
                 return;
             }
         }
 
         if (page < 1 || (filter is not "all" and not "mine" && !filter.StartsWith('@')))
         {
-            SendSystemMessage(connection, "Usage: !mini list [all|mine|@group] [page]");
+            SendSystemMessage(invoker, "Usage: !mini list [all|mine|@group] [page]");
             return;
         }
 
-        IEnumerable<RoleplayMiniatureStatus> miniatures = connection.Player.Zone.GetRoleplayMiniatureStatuses();
+        IEnumerable<RoleplayMiniatureStatus> miniatures = invoker.Zone.GetRoleplayMiniatureStatuses();
 
         if (filter == "mine")
-            miniatures = miniatures.Where(miniature => miniature.OwnerGuid == connection.Player.Guid);
+            miniatures = miniatures.Where(miniature => miniature.OwnerGuid == invoker.Guid);
         else if (filter.StartsWith('@'))
             miniatures = miniatures.Where(miniature => miniature.Group == filter[1..]);
 
@@ -241,7 +241,7 @@ public static class RoleplayCommandRegistry
 
         if (page > pageCount || results.Length == 0)
         {
-            SendSystemMessage(connection, results.Length == 0
+            SendSystemMessage(invoker, results.Length == 0
                 ? $"No miniatures matched {filter}."
                 : $"There is no miniature page {page}; last page is {pageCount}.");
             return;
@@ -254,24 +254,24 @@ public static class RoleplayCommandRegistry
                 $"#{miniature.Id} {miniature.Name} [{miniature.ModelId}] @{miniature.Group} by {miniature.OwnerName}")
             .ToArray();
 
-        SendSystemMessage(connection, $"Miniatures {page}/{pageCount} ({results.Length}):\n{string.Join('\n', entries)}");
+        SendSystemMessage(invoker, $"Miniatures {page}/{pageCount} ({results.Length}):\n{string.Join('\n', entries)}");
     }
 
-    private static void ShowInfo(GatewayConnection connection, string[] args)
+    private void ShowInfo(Player invoker, string[] args)
     {
         if (args.Length != 1)
         {
-            SendSystemMessage(connection, "Usage: !mini info [#id|nearest]");
+            SendSystemMessage(invoker, "Usage: !mini info [#id|nearest]");
             return;
         }
 
-        var miniatures = connection.Player.Zone.GetRoleplayMiniatureStatuses();
+        var miniatures = invoker.Zone.GetRoleplayMiniatureStatuses();
         RoleplayMiniatureStatus? miniature;
 
         if (args[0].Equals("nearest", StringComparison.OrdinalIgnoreCase))
         {
             miniature = miniatures
-                .OrderBy(candidate => DistanceSquared(candidate.Position, connection.Player.Position))
+                .OrderBy(candidate => DistanceSquared(candidate.Position, invoker.Position))
                 .FirstOrDefault();
         }
         else if (TryParseId(args[0], out var id))
@@ -280,40 +280,94 @@ public static class RoleplayCommandRegistry
         }
         else
         {
-            SendSystemMessage(connection, "Usage: !mini info [#id|nearest]");
+            SendSystemMessage(invoker, "Usage: !mini info [#id|nearest]");
             return;
         }
 
         if (miniature is null)
         {
-            SendSystemMessage(connection, "No matching miniature exists in this zone.");
+            SendSystemMessage(invoker, "No matching miniature exists in this zone.");
             return;
         }
 
-        var distance = MathF.Sqrt(DistanceSquared(miniature.Position, connection.Player.Position));
-        SendSystemMessage(connection,
+        var distance = MathF.Sqrt(DistanceSquared(miniature.Position, invoker.Position));
+        SendSystemMessage(invoker,
             $"#{miniature.Id} {miniature.Name} | model {miniature.ModelId} | @{miniature.Group} | " +
             $"placed by {miniature.OwnerName} | {distance:0.#}m away");
     }
 
-    private static void ListGroups(GatewayConnection connection)
+    private void ListGroups(Player invoker)
     {
-        var groups = connection.Player.Zone.GetRoleplayMiniatureStatuses()
+        var groups = invoker.Zone.GetRoleplayMiniatureStatuses()
             .GroupBy(miniature => miniature.Group)
             .OrderBy(group => group.Key)
             .Select(group => $"@{group.Key}: {group.Count()}")
             .ToArray();
 
-        SendSystemMessage(connection, groups.Length == 0
+        SendSystemMessage(invoker, groups.Length == 0
             ? "There are no miniature groups in this zone."
             : $"Miniature groups:\n{string.Join('\n', groups)}");
     }
 
-    private static void Remove(GatewayConnection connection, string[] args)
+    private void Say(Player invoker, string[] args)
+    {
+        if (args.Length < 2)
+        {
+            SendSystemMessage(invoker, "Usage: !mini say [#id|nearest] [message]");
+            return;
+        }
+
+        var statuses = invoker.Zone.GetRoleplayMiniatureStatuses();
+        int id;
+
+        if (args[0].Equals("nearest", StringComparison.OrdinalIgnoreCase))
+        {
+            var nearest = statuses
+                .OrderBy(candidate => DistanceSquared(candidate.Position, invoker.Position))
+                .FirstOrDefault();
+
+            if (nearest is null)
+            {
+                SendSystemMessage(invoker, "There are no miniatures in this zone.");
+                return;
+            }
+
+            id = nearest.Id;
+        }
+        else if (!TryParseId(args[0], out id))
+        {
+            SendSystemMessage(invoker, "Usage: !mini say [#id|nearest] [message]");
+            return;
+        }
+
+        var message = string.Join(' ', args[1..]);
+        var result = invoker.Zone.TrySpeakRoleplayMiniature(
+            id, invoker.Guid, message, out var miniature);
+
+        switch (result)
+        {
+            case RoleplayMiniatureSpeakResult.Success:
+                _chatCommandManager.LogAction(
+                    this, invoker, "Say", $"#{miniature.Id} {miniature.Name}", $"message=\"{message}\"");
+                break;
+            case RoleplayMiniatureSpeakResult.NotFound:
+                SendSystemMessage(invoker, $"No miniature #{id} exists in this zone.");
+                break;
+            case RoleplayMiniatureSpeakResult.InvalidMessage:
+                SendSystemMessage(invoker,
+                    $"Speech must be 1-{RoleplayMiniatureRules.MaximumSpeechLength} characters on one line.");
+                break;
+            case RoleplayMiniatureSpeakResult.RateLimited:
+                SendSystemMessage(invoker, "Please wait a moment before speaking through another miniature.");
+                break;
+        }
+    }
+
+    private void Remove(Player invoker, string[] args)
     {
         if (args.Length is < 1 or > 2)
         {
-            SendSystemMessage(connection, "Usage: !mini remove [#id|nearest] [radius]");
+            SendSystemMessage(invoker, "Usage: !mini remove [#id|nearest] [radius]");
             return;
         }
 
@@ -323,14 +377,14 @@ public static class RoleplayCommandRegistry
         {
             if (!TryParseRadius(args, 1, out var radius))
             {
-                SendSystemMessage(connection, $"Radius must be between 0 and {MaximumRemovalRadius:0}.");
+                SendSystemMessage(invoker, $"Radius must be between 0 and {MaximumRemovalRadius:0}.");
                 return;
             }
 
-            if (!connection.Player.Zone.TryRemoveNearestRoleplayMiniature(
-                connection.Player.Position, radius, out miniature))
+            if (!invoker.Zone.TryRemoveNearestRoleplayMiniature(
+                invoker.Position, radius, out miniature))
             {
-                SendSystemMessage(connection, $"No miniature found within {radius:0.#}m.");
+                SendSystemMessage(invoker, $"No miniature found within {radius:0.#}m.");
                 return;
             }
         }
@@ -338,26 +392,26 @@ public static class RoleplayCommandRegistry
         {
             if (args.Length != 1 || !TryParseId(args[0], out var id))
             {
-                SendSystemMessage(connection, "Usage: !mini remove [#id|nearest] [radius]");
+                SendSystemMessage(invoker, "Usage: !mini remove [#id|nearest] [radius]");
                 return;
             }
 
-            if (!connection.Player.Zone.TryRemoveRoleplayMiniature(id, out miniature))
+            if (!invoker.Zone.TryRemoveRoleplayMiniature(id, out miniature))
             {
-                SendSystemMessage(connection, $"No miniature #{id} exists in this zone.");
+                SendSystemMessage(invoker, $"No miniature #{id} exists in this zone.");
                 return;
             }
         }
 
-        LogAction(connection, "Remove", miniature);
-        SendSystemMessage(connection, $"Removed #{miniature.Id} {miniature.Name}.");
+        LogAction(invoker, "Remove", miniature);
+        SendSystemMessage(invoker, $"Removed #{miniature.Id} {miniature.Name}.");
     }
 
-    private static void Clear(GatewayConnection connection, string[] args)
+    private void Clear(Player invoker, string[] args)
     {
         if (args.Length is < 1 or > 2)
         {
-            SendSystemMessage(connection, "Usage: !mini clear [all|mine|@group|nearby] [radius]");
+            SendSystemMessage(invoker, "Usage: !mini clear [all|mine|@group|nearby] [radius]");
             return;
         }
 
@@ -366,34 +420,29 @@ public static class RoleplayCommandRegistry
 
         if (scope == "all" && args.Length == 1)
         {
-            removed = connection.Player.Zone.RemoveAllRoleplayMiniatures();
+            removed = invoker.Zone.RemoveAllRoleplayMiniatures();
         }
         else if (scope == "mine" && args.Length == 1)
         {
-            removed = connection.Player.Zone.RemoveRoleplayMiniaturesByOwner(connection.Player.Guid);
+            removed = invoker.Zone.RemoveRoleplayMiniaturesByOwner(invoker.Guid);
         }
         else if (scope.StartsWith('@') && args.Length == 1 &&
             RoleplayMiniatureRules.TryNormalizeGroup(scope, out var group))
         {
-            removed = connection.Player.Zone.RemoveRoleplayMiniaturesByGroup(group);
+            removed = invoker.Zone.RemoveRoleplayMiniaturesByGroup(group);
         }
         else if (scope == "nearby" && TryParseRadius(args, 1, out var radius))
         {
-            removed = connection.Player.Zone.RemoveNearbyRoleplayMiniatures(connection.Player.Position, radius);
+            removed = invoker.Zone.RemoveNearbyRoleplayMiniatures(invoker.Position, radius);
         }
         else
         {
-            SendSystemMessage(connection, "Usage: !mini clear [all|mine|@group|nearby] [radius]");
+            SendSystemMessage(invoker, "Usage: !mini clear [all|mine|@group|nearby] [radius]");
             return;
         }
 
-        _logger.LogInformation(
-            "Miniature Clear|Actor: \"{ActorName}\" ({ActorGuid}), Scope: {Scope}, Removed: {Removed}",
-            connection.Player.Name.FullName,
-            connection.Player.Guid,
-            scope,
-            removed);
-        SendSystemMessage(connection, $"Removed {removed} miniature(s) from {scope}.");
+        _chatCommandManager.LogAction(this, invoker, "Clear", scope, $"removed={removed}");
+        SendSystemMessage(invoker, $"Removed {removed} miniature(s) from {scope}.");
     }
 
     private static bool TryParseId(string argument, out int id)
@@ -418,39 +467,35 @@ public static class RoleplayCommandRegistry
             new Vector3(right.X, right.Y, right.Z));
     }
 
-    private static void SendHelp(GatewayConnection connection)
+    private void SendHelp(Player invoker)
     {
-        SendSystemMessage(connection,
+        SendSystemMessage(invoker,
             "Tabletop miniatures:\n" +
             "!mini spawn [modelId] [@group] [name]\n" +
             "!mini models [search|*] [page]\n" +
             "!mini list [all|mine|@group] [page]\n" +
             "!mini info [#id|nearest]\n" +
+            "!mini say [#id|nearest] [message]\n" +
             "!mini groups\n" +
             "!mini remove [#id|nearest] [radius]\n" +
             "!mini clear [all|mine|@group|nearby] [radius]");
     }
 
-    private static void SendSystemMessage(GatewayConnection connection, string message)
+    private void SendSystemMessage(Player invoker, string message)
     {
-        ChatHelper.SendSystemMessage(connection, message);
+        ChatHelper.SendSystemMessage(invoker, message);
     }
 
-    private static void LogAction(
-        GatewayConnection connection,
+    private void LogAction(
+        Player invoker,
         string action,
         RoleplayMiniatureStatus miniature)
     {
-        _logger.LogInformation(
-            "Miniature {Action}|Actor: \"{ActorName}\" ({ActorGuid}), Miniature: #{MiniatureId} \"{Name}\" " +
-            "(Model {ModelId}, Group {Group}, Owner {OwnerGuid})",
+        _chatCommandManager.LogAction(
+            this,
+            invoker,
             action,
-            connection.Player.Name.FullName,
-            connection.Player.Guid,
-            miniature.Id,
-            miniature.Name,
-            miniature.ModelId,
-            miniature.Group,
-            miniature.OwnerGuid);
+            $"#{miniature.Id} {miniature.Name}",
+            $"model={miniature.ModelId}, group={miniature.Group}, owner={miniature.OwnerGuid}");
     }
 }

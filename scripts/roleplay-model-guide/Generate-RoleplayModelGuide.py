@@ -322,6 +322,12 @@ def parse_args():
     parser.add_argument("--npcs", type=pathlib.Path, required=True)
     parser.add_argument("--pdf", type=pathlib.Path, required=True)
     parser.add_argument("--csv", type=pathlib.Path, required=True)
+    parser.add_argument("--json", type=pathlib.Path)
+    parser.add_argument(
+        "--commands",
+        type=pathlib.Path,
+        default=pathlib.Path(__file__).resolve().parents[2] / "site" / "data" / "commands.json",
+    )
     return parser.parse_args()
 
 
@@ -582,6 +588,43 @@ def write_catalog_csv(path, models):
             )
 
 
+def write_catalog_json(path, models, revision):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "revision": revision,
+        "generatedOn": datetime.date.today().isoformat(),
+        "totalModels": len(models),
+        "modelsWithKnownNames": sum(1 for model in models if model["known_names"]),
+        "categories": CATEGORY_ORDER,
+        "models": [
+            {
+                "id": model["id"],
+                "assetFile": model["file"],
+                "label": model["friendly_label"],
+                "category": model["category"],
+                "roleplayFit": model["roleplay_fit"],
+                "knownNames": model["known_names"],
+                "npcDefinitionIds": model["npc_definition_ids"],
+                "description": model["description"],
+                "descriptor": model["descriptor"],
+                "scale": model["scale"],
+                "notes": model["notes"],
+                "imageUrl": None,
+            }
+            for model in models
+        ],
+    }
+
+    with path.open("w", encoding="utf-8", newline="\n") as handle:
+        json.dump(payload, handle, ensure_ascii=True, separators=(",", ":"))
+        handle.write("\n")
+
+
+def load_commands(path):
+    with path.open("r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
 def escaped(value):
     return html.escape(str(value))
 
@@ -769,7 +812,7 @@ def add_cover(story, styles, models, revision):
     story.append(PageBreak())
 
 
-def add_quick_start(story, styles):
+def add_quick_start(story, styles, commands):
     story.append(Paragraph("Quick Start", styles["guide_heading"]))
     story.append(
         Paragraph(
@@ -779,15 +822,6 @@ def add_quick_start(story, styles):
         )
     )
 
-    commands = [
-        ("Find likely matches", "!mini models wolf"),
-        ("Browse the complete catalog", "!mini models * 2"),
-        ("Place a miniature", "!mini spawn 176 @enemies Briar Wolf"),
-        ("List a scene group", "!mini list @enemies"),
-        ("Inspect the closest piece", "!mini info nearest"),
-        ("Remove by short ID", "!mini remove #1"),
-        ("Clean a scene group", "!mini clear @enemies"),
-    ]
     command_data = [
         [
             paragraph("Task", styles["table_header"]),
@@ -795,8 +829,11 @@ def add_quick_start(story, styles):
         ]
     ]
     command_data.extend(
-        [paragraph(label, styles["small"]), Paragraph(command, styles["command"])]
-        for label, command in commands
+        [
+            paragraph(command["task"], styles["small"]),
+            Paragraph(command["example"], styles["command"]),
+        ]
+        for command in commands
     )
     command_table = Table(command_data, colWidths=[2.1 * inch, 4.9 * inch], repeatRows=1)
     command_table.setStyle(default_table_style())
@@ -813,6 +850,45 @@ def add_quick_start(story, styles):
     ]
     for item in cautions:
         story.append(Paragraph(f"- {escaped(item)}", styles["body"]))
+
+    story.append(PageBreak())
+    story.append(Paragraph("Complete Command Reference", styles["guide_heading"]))
+    story.append(
+        Paragraph(
+            "Commands begin with !mini in normal chat. A #id identifies one currently placed "
+            "miniature; use !mini list or !mini info nearest to discover it. Group names begin "
+            "with @ and organize pieces for listing and cleanup.",
+            styles["body"],
+        )
+    )
+
+    rows = [
+        [
+            paragraph("Syntax", styles["table_header"]),
+            paragraph("Purpose", styles["table_header"]),
+            paragraph("Details", styles["table_header"]),
+        ]
+    ]
+    rows.extend(
+        [
+            Paragraph(command["syntax"], styles["command"]),
+            paragraph(command["task"], styles["small"]),
+            paragraph(command["description"], styles["small"]),
+        ]
+        for command in commands
+    )
+    table = LongTable(rows, colWidths=[3.05 * inch, 1.65 * inch, 5.0 * inch], repeatRows=1)
+    table.setStyle(default_table_style())
+    story.append(table)
+    story.append(Spacer(1, 0.14 * inch))
+    story.append(
+        Paragraph(
+            "Safety limits: each player may place up to 40 miniatures in a zone, each zone may "
+            "contain up to 200, and placements have a short cooldown. Remove and clear commands "
+            "only affect player-created roleplay miniatures, never normal world NPCs.",
+            styles["body"],
+        )
+    )
 
 
 def add_category_summary(story, styles, models):
@@ -973,7 +1049,7 @@ def default_table_style(font_size=7.2):
     )
 
 
-def write_pdf(path, models, revision):
+def write_pdf(path, models, revision, commands):
     path.parent.mkdir(parents=True, exist_ok=True)
     styles = make_styles()
     document = CatalogDocument(
@@ -990,7 +1066,7 @@ def write_pdf(path, models, revision):
 
     story = []
     add_cover(story, styles, models, revision)
-    add_quick_start(story, styles)
+    add_quick_start(story, styles, commands)
     add_category_summary(story, styles, models)
     add_starter_models(story, styles, models)
     add_complete_catalog(story, styles, models)
@@ -1006,9 +1082,13 @@ def main():
     models = load_models(models_path)
     aliases, definition_ids = load_npc_aliases(npcs_path)
     enrich_models(models, aliases, definition_ids)
+    commands = load_commands(args.commands.resolve())
+    revision = get_revision(repository_root)
 
     write_catalog_csv(args.csv.resolve(), models)
-    write_pdf(args.pdf.resolve(), models, get_revision(repository_root))
+    if args.json:
+        write_catalog_json(args.json.resolve(), models, revision)
+    write_pdf(args.pdf.resolve(), models, revision, commands)
 
     category_counts = {
         category: sum(1 for model in models if model["category"] == category)

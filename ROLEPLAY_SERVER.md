@@ -54,8 +54,8 @@ The first deployment uploads the launcher-verified public client. It uses the
 official manifest as a file allowlist, then regenerates sizes and hashes from the
 hosted copy so launcher verification remains self-consistent. Later deployments
 reuse those files unless `-RefreshClient` is supplied. The remote installer also
-configures Caddy, authentication rate limits, a daily database and resource backup,
-and a 14-day local backup retention window.
+configures Caddy, authentication rate limits, a daily database, resource, and model
+image backup, and a 14-day local backup retention window.
 
 Public DNS must point the deployment hostname at the VPS with Cloudflare proxying
 disabled because the game login and gateway use UDP. The default hostname is
@@ -96,3 +96,45 @@ python scripts/roleplay-model-guide/Generate-RoleplayModelGuide.py `
     --pdf output/pdf/OSFR_Roleplay_Model_Field_Guide.pdf `
     --csv output/model-catalog/OSFR_Roleplay_Model_Catalog.csv
 ```
+
+## Model images
+
+Players can sign in to the website with their game account and contribute one
+preview image per catalog model. Website authentication uses its own encrypted
+cookie and does not create or consume the short-lived launcher session stored in
+the user table.
+
+Uploads accept JPEG, PNG, or WebP files up to 4 MB and reject unknown model IDs.
+The WebAPI removes image metadata, converts the file to WebP, limits it to
+1280x960, and progressively optimizes it to 512 KB or less. Uploading another
+image for the same model atomically replaces the existing file and updates the
+displayed `Last updated by` account credit.
+
+On the VPS, persistent files and attribution metadata live under
+`/var/lib/sanctuary/model-catalog`. Data protection keys live separately under
+`/var/lib/sanctuary/data-protection`; losing those keys signs website users out
+but does not affect game accounts.
+
+## Collection volunteer work
+
+The roleplay server keeps community hardpoint surveying separate from the live
+collection resources. Every player can submit their current position and facing
+to a persistent review queue:
+
+```text
+!volunteer pools
+!volunteer place mushrooms beside the blue tree
+!volunteer mine
+!volunteer undo last
+```
+
+The website's Collection Map view can filter submissions by zone, pool, and
+review status and plots X/Z coordinates for one zone at a time. Contributors can
+edit or remove their own pending submissions after signing in with their game
+account. Administrators can correct coordinates and mark submissions accepted or
+rejected. Review status is organizational only: it never mutates active collection
+nodes or the upstream collection resource files automatically.
+
+Gateway and WebAPI share the persistent JSON file at
+`/var/lib/sanctuary/collection-volunteers/placements.json`. The file is protected
+by a cross-process lock, written atomically, and included in the daily VPS backup.

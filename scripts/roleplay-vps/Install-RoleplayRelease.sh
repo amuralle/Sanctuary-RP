@@ -2,20 +2,26 @@
 
 set -euo pipefail
 
-if [[ $# -ne 3 ]]; then
-    echo "Usage: $0 <release-archive> <release-id> <domain>" >&2
+if [[ $# -ne 4 ]]; then
+    echo "Usage: $0 <release-archive> <release-id> <domain> <website-domain>" >&2
     exit 2
 fi
 
 archive_path=$1
 release_id=$2
 domain=$3
+website_domain=$4
 release_path="/opt/sanctuary/releases/$release_id"
 environment_path=/etc/sanctuary/sanctuary.env
 backup_client_path=/etc/sanctuary/backup.cnf
 
 if [[ ! $domain =~ ^[a-zA-Z0-9.-]+$ ]]; then
     echo "Invalid deployment domain: $domain" >&2
+    exit 2
+fi
+
+if [[ ! $website_domain =~ ^[a-zA-Z0-9.-]+$ ]]; then
+    echo "Invalid website domain: $website_domain" >&2
     exit 2
 fi
 
@@ -38,6 +44,28 @@ chmod 0750 \
     "$release_path/webapi/Sanctuary.WebAPI"
 
 install -d -m 0750 -o root -g sanctuary /etc/sanctuary
+install -d -m 0750 -o sanctuary -g sanctuary /var/lib/sanctuary/model-catalog
+install -d -m 0750 -o sanctuary -g sanctuary /var/lib/sanctuary/collection-volunteers
+install -d -m 0750 -o sanctuary -g sanctuary /var/lib/sanctuary/collection-node-spawns
+install -d -m 0700 -o sanctuary -g sanctuary /var/lib/sanctuary/data-protection
+
+# Live authoring writes hardpoints at runtime. Keep those files outside releases,
+# while seeding any new pool files supplied by the deployed build.
+while IFS= read -r -d '' source_file; do
+    relative_path=${source_file#"$release_path/gateway/Resources/CollectionNodeSpawns/"}
+    target_file="/var/lib/sanctuary/collection-node-spawns/$relative_path"
+    if [[ ! -f $target_file ]]; then
+        install -d -m 0750 -o sanctuary -g sanctuary "$(dirname "$target_file")"
+        install -m 0640 -o sanctuary -g sanctuary "$source_file" "$target_file"
+    fi
+done < <(find "$release_path/gateway/Resources/CollectionNodeSpawns" -type f -name '*.json' -print0)
+
+rm -rf "$release_path/gateway/Resources/CollectionNodeSpawns"
+ln -s /var/lib/sanctuary/collection-node-spawns \
+    "$release_path/gateway/Resources/CollectionNodeSpawns"
+rm -rf "$release_path/webapi/CollectionNodeSpawns"
+ln -s /var/lib/sanctuary/collection-node-spawns \
+    "$release_path/webapi/CollectionNodeSpawns"
 
 if [[ ! -f $environment_path ]]; then
     database_password=$(openssl rand -hex 32)
@@ -89,6 +117,11 @@ cat > /srv/osfr-rp/www/servermanifest.xml <<EOF
 EOF
 chown caddy:caddy /srv/osfr-rp/www/servermanifest.xml
 
+install -d -m 0755 -o caddy -g caddy /srv/osfr-rp/site
+find /srv/osfr-rp/site -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+cp -a "$release_path/site/." /srv/osfr-rp/site/
+chown -R caddy:caddy /srv/osfr-rp/site
+
 cat > /etc/systemd/system/sanctuary-login.service <<'EOF'
 [Unit]
 Description=Sanctuary login server
@@ -139,6 +172,7 @@ Environment=Server__ClientVersion=1.910.1.530630
 Environment=Server__ServerAddress=$domain:20260
 Environment=Server__LoginGatewayAddress=127.0.0.1:20041
 Environment=Server__ShowMemberNagScreen=false
+Environment=CollectionVolunteers__StoragePath=/var/lib/sanctuary/collection-volunteers/placements.json
 ExecStart=/opt/sanctuary/current/gateway/Sanctuary.Gateway
 Restart=on-failure
 RestartSec=5
@@ -169,6 +203,9 @@ Group=sanctuary
 WorkingDirectory=/opt/sanctuary/current/webapi
 EnvironmentFile=/etc/sanctuary/sanctuary.env
 Environment=ASPNETCORE_URLS=http://127.0.0.1:20040
+Environment=ModelCatalog__StoragePath=/var/lib/sanctuary/model-catalog
+Environment=ModelCatalog__DataProtectionPath=/var/lib/sanctuary/data-protection
+Environment=CollectionVolunteers__StoragePath=/var/lib/sanctuary/collection-volunteers/placements.json
 ExecStart=/opt/sanctuary/current/webapi/Sanctuary.WebAPI
 Restart=on-failure
 RestartSec=5
@@ -196,7 +233,47 @@ $domain {
         @auth path /login /register
         reverse_proxy @auth 127.0.0.1:20040
 
+        redir /guide /guide/
+        handle /guide/stats {
+            rewrite * /stats
+            reverse_proxy 127.0.0.1:20040
+        }
+        handle /guide/catalog/* {
+            uri strip_prefix /guide
+            reverse_proxy 127.0.0.1:20040
+        }
+        @volunteers path /volunteers/*
+        reverse_proxy @volunteers 127.0.0.1:20040
+        handle_path /guide/* {
+            root * /srv/osfr-rp/site
+            file_server
+        }
+
         root * /srv/osfr-rp/www
+        file_server
+    }
+
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy no-referrer
+        -Server
+    }
+}
+
+$website_domain {
+    encode zstd gzip
+
+    route {
+        @stats path /stats
+        reverse_proxy @stats 127.0.0.1:20040
+
+        @catalog path /catalog/*
+        reverse_proxy @catalog 127.0.0.1:20040
+
+        @volunteers path /volunteers/*
+        reverse_proxy @volunteers 127.0.0.1:20040
+
+        root * /srv/osfr-rp/site
         file_server
     }
 
@@ -230,7 +307,15 @@ mariadb-dump --defaults-extra-file=/etc/sanctuary/backup.cnf \
     --single-transaction --routines --events sanctuary_roleplay > "$work_path/database.sql"
 
 if [[ -d /opt/sanctuary/current/gateway/Resources ]]; then
-    cp -a /opt/sanctuary/current/gateway/Resources "$work_path/Resources"
+    cp -aL /opt/sanctuary/current/gateway/Resources "$work_path/Resources"
+fi
+
+if [[ -d /var/lib/sanctuary/model-catalog ]]; then
+    cp -a /var/lib/sanctuary/model-catalog "$work_path/model-catalog"
+fi
+
+if [[ -d /var/lib/sanctuary/collection-volunteers ]]; then
+    cp -a /var/lib/sanctuary/collection-volunteers "$work_path/collection-volunteers"
 fi
 
 tar -czf "$backup_root/sanctuary-$stamp.tar.gz" -C "$work_path" .

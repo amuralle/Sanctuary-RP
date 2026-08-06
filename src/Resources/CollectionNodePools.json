@@ -4,13 +4,185 @@
     "ZoneDefinitionId": 1,
     "NodeType": "mushrooms",
     "MaxActiveNodes": 12,
-    "RespawnSeconds": 60
+    "RespawnSeconds": 60,
+    "DropTable": [
+      { "ItemDefinitionId": 11082, "Weight": 100 },
+      { "ItemDefinitionId": 11083, "Weight": 100 },
+      { "ItemDefinitionId": 11084, "Weight": 100 },
+      { "ItemDefinitionId": 11086, "Weight": 100 },
+      { "ItemDefinitionId": 11087, "Weight": 100 },
+      { "ItemDefinitionId": 11088, "Weight": 100 }
+    ]
   },
   {
     "Key": "briarwood-mushrooms-rare",
     "ZoneDefinitionId": 1,
     "NodeType": "rare-mushrooms",
     "MaxActiveNodes": 2,
-    "RespawnSeconds": 300
+    "RespawnSeconds": 300,
+    "DropTable": [
+      { "ItemDefinitionId": 11081, "Weight": 100 },
+      { "ItemDefinitionId": 11085, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "blackspore-fossils",
+    "ZoneDefinitionId": 1,
+    "NodeType": "fossils",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3799, "Weight": 100 },
+      { "ItemDefinitionId": 3800, "Weight": 100 },
+      { "ItemDefinitionId": 3801, "Weight": 100 },
+      { "ItemDefinitionId": 3802, "Weight": 100 },
+      { "ItemDefinitionId": 3803, "Weight": 100 },
+      { "ItemDefinitionId": 3804, "Weight": 100 },
+      { "ItemDefinitionId": 3805, "Weight": 100 },
+      { "ItemDefinitionId": 3806, "Weight": 100 },
+      { "ItemDefinitionId": 3807, "Weight": 100 },
+      { "ItemDefinitionId": 3808, "Weight": 100 },
+      { "ItemDefinitionId": 3809, "Weight": 100 },
+      { "ItemDefinitionId": 3810, "Weight": 100 },
+      { "ItemDefinitionId": 3811, "Weight": 100 },
+      { "ItemDefinitionId": 3812, "Weight": 100 },
+      { "ItemDefinitionId": 3813, "Weight": 100 },
+      { "ItemDefinitionId": 3814, "Weight": 100 },
+      { "ItemDefinitionId": 3823, "Weight": 100 },
+      { "ItemDefinitionId": 3824, "Weight": 100 },
+      { "ItemDefinitionId": 3825, "Weight": 100 },
+      { "ItemDefinitionId": 3826, "Weight": 100 },
+      { "ItemDefinitionId": 3827, "Weight": 100 },
+      { "ItemDefinitionId": 3828, "Weight": 100 },
+      { "ItemDefinitionId": 3829, "Weight": 100 },
+      { "ItemDefinitionId": 3830, "Weight": 100 },
+      { "ItemDefinitionId": 3831, "Weight": 100 },
+      { "ItemDefinitionId": 3832, "Weight": 100 },
+      { "ItemDefinitionId": 3833, "Weight": 100 },
+      { "ItemDefinitionId": 3834, "Weight": 100 },
+      { "ItemDefinitionId": 3835, "Weight": 100 },
+      { "ItemDefinitionId": 3836, "Weight": 100 },
+      { "ItemDefinitionId": 3837, "Weight": 100 },
+      { "ItemDefinitionId": 3838, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "blackspore-fossils-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "rare-fossils",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3815, "Weight": 100 },
+      { "ItemDefinitionId": 3816, "Weight": 100 },
+      { "ItemDefinitionId": 3817, "Weight": 100 },
+      { "ItemDefinitionId": 3818, "Weight": 100 },
+      { "ItemDefinitionId": 3819, "Weight": 100 },
+      { "ItemDefinitionId": 3820, "Weight": 100 },
+      { "ItemDefinitionId": 3821, "Weight": 100 },
+      { "ItemDefinitionId": 3822, "Weight": 100 },
+      { "ItemDefinitionId": 3839, "Weight": 100 },
+      { "ItemDefinitionId": 3840, "Weight": 100 },
+      { "ItemDefinitionId": 3841, "Weight": 100 },
+      { "ItemDefinitionId": 3842, "Weight": 100 },
+      { "ItemDefinitionId": 3843, "Weight": 100 },
+      { "ItemDefinitionId": 3844, "Weight": 100 },
+      { "ItemDefinitionId": 3845, "Weight": 100 },
+      { "ItemDefinitionId": 3846, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "stillwater-sparkling-water",
+    "ZoneDefinitionId": 1,
+    "NodeType": "sparkling-water",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3935, "Weight": 100 },
+      { "ItemDefinitionId": 3936, "Weight": 100 },
+      { "ItemDefinitionId": 3937, "Weight": 100 },
+      { "ItemDefinitionId": 3938, "Weight": 100 },
+      { "ItemDefinitionId": 3939, "Weight": 100 },
+      { "ItemDefinitionId": 3940, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "stillwater-sparkling-water-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "rare-sparkling-water",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3941, "Weight": 100 },
+      { "ItemDefinitionId": 3942, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "stillwater-flowers",
+    "ZoneDefinitionId": 1,
+    "NodeType": "flowers",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3106, "Weight": 100 },
+      { "ItemDefinitionId": 3107, "Weight": 100 },
+      { "ItemDefinitionId": 3108, "Weight": 100 },
+      { "ItemDefinitionId": 3109, "Weight": 100 },
+      { "ItemDefinitionId": 3110, "Weight": 100 },
+      { "ItemDefinitionId": 3111, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "stillwater-flowers-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "rare-flowers",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3112, "Weight": 100 },
+      { "ItemDefinitionId": 3113, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "stillwater-robgoblin-junk",
+    "ZoneDefinitionId": 1,
+    "NodeType": "robgoblin-junk",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3122, "Weight": 100 },
+      { "ItemDefinitionId": 3123, "Weight": 100 },
+      { "ItemDefinitionId": 3124, "Weight": 100 },
+      { "ItemDefinitionId": 3125, "Weight": 100 },
+      { "ItemDefinitionId": 3126, "Weight": 100 },
+      { "ItemDefinitionId": 3127, "Weight": 100 },
+      { "ItemDefinitionId": 11065, "Weight": 100 },
+      { "ItemDefinitionId": 11066, "Weight": 100 },
+      { "ItemDefinitionId": 11067, "Weight": 100 },
+      { "ItemDefinitionId": 11068, "Weight": 100 },
+      { "ItemDefinitionId": 11069, "Weight": 100 },
+      { "ItemDefinitionId": 11070, "Weight": 100 },
+      { "ItemDefinitionId": 3146, "Weight": 100 },
+      { "ItemDefinitionId": 3147, "Weight": 100 },
+      { "ItemDefinitionId": 3148, "Weight": 100 },
+      { "ItemDefinitionId": 3149, "Weight": 100 },
+      { "ItemDefinitionId": 3150, "Weight": 100 },
+      { "ItemDefinitionId": 3151, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "stillwater-robgoblin-junk-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "rare-robgoblin-junk",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3128, "Weight": 100 },
+      { "ItemDefinitionId": 3129, "Weight": 100 },
+      { "ItemDefinitionId": 11071, "Weight": 100 },
+      { "ItemDefinitionId": 11072, "Weight": 100 },
+      { "ItemDefinitionId": 3152, "Weight": 100 },
+      { "ItemDefinitionId": 3153, "Weight": 100 }
+    ]
   }
 ]

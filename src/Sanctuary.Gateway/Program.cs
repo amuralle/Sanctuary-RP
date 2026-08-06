@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Globalization;
+using System.IO;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,6 +9,7 @@ using Microsoft.Extensions.Logging;
 
 using NLog.Extensions.Logging;
 
+using Sanctuary.Core.CollectionVolunteers;
 using Sanctuary.Core.Configuration;
 using Sanctuary.Core.Extensions;
 using Sanctuary.Database;
@@ -52,6 +54,11 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
 
     // Database
     serviceCollection.AddDatabase(hostBuilderContext.Configuration);
+
+    var collectionVolunteerStoragePath = hostBuilderContext.Configuration[
+        "CollectionVolunteers:StoragePath"] ?? Path.Combine(
+            "Data", "CollectionVolunteers", "placements.json");
+    serviceCollection.AddSingleton(new CollectionVolunteerStore(collectionVolunteerStoragePath));
 
     // Server Options
     var serverOptions = hostBuilderContext.Configuration.GetSection(ServerOptions.Section).Get<GatewayServerOptions>();

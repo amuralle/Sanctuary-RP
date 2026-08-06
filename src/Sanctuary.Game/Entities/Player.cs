@@ -603,6 +603,9 @@ public sealed class Player : ClientPcData, IEntity
         foreach (var visiblePlayer in VisiblePlayers)
             visiblePlayer.Value.OnRemoveVisiblePlayers([this]);
 
+        foreach (var visibleNpc in VisibleNpcs)
+            visibleNpc.Value.OnRemoveVisiblePlayers([this]);
+
         Mount?.Dispose();
         Mount = null;
 

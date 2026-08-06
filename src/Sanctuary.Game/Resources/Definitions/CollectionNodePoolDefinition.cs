@@ -11,6 +11,30 @@ public sealed class CollectionNodePoolDefinition
     public required string NodeType { get; set; }
     public int MaxActiveNodes { get; set; }
     public int RespawnSeconds { get; set; } = 30;
+    public List<CollectionNodeDropDefinition> DropTable { get; set; } = [];
+
+    public int TotalDropWeight => DropTable.Sum(drop => drop.Weight);
+
+    /// <summary>
+    /// Selects the drop whose weighted range contains the supplied roll.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The roll is outside the drop table's weighted range.</exception>
+    /// <exception cref="InvalidOperationException">The drop table does not contain a matching entry.</exception>
+    public CollectionNodeDropDefinition SelectDrop(int roll)
+    {
+        if (roll < 0 || roll >= TotalDropWeight)
+            throw new ArgumentOutOfRangeException(nameof(roll));
+
+        foreach (var drop in DropTable)
+        {
+            if (roll < drop.Weight)
+                return drop;
+
+            roll -= drop.Weight;
+        }
+
+        throw new InvalidOperationException("The collection node drop table is invalid.");
+    }
 
     /// <summary>
     /// Gets the number of nodes that should be active for the supplied hardpoint count.

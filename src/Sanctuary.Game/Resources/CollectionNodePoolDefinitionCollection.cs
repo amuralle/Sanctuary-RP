@@ -48,8 +48,14 @@ public sealed class CollectionNodePoolDefinitionCollection : ObservableConcurren
 
             foreach (var entry in entries)
             {
+                var totalDropWeight = entry.DropTable.Sum(drop => (long)drop.Weight);
+
                 if (string.IsNullOrWhiteSpace(entry.Key) || string.IsNullOrWhiteSpace(entry.NodeType) ||
-                    entry.ZoneDefinitionId <= 0 || entry.MaxActiveNodes < 0 || entry.RespawnSeconds is < 1 or > 86400)
+                    entry.ZoneDefinitionId <= 0 || entry.MaxActiveNodes < 0 || entry.RespawnSeconds is < 1 or > 86400 ||
+                    entry.DropTable.Count == 0 ||
+                    entry.DropTable.Any(drop => drop.ItemDefinitionId <= 0 || drop.Weight <= 0) ||
+                    totalDropWeight > int.MaxValue ||
+                    entry.DropTable.Select(drop => drop.ItemDefinitionId).Distinct().Count() != entry.DropTable.Count)
                 {
                     _logger.LogError("Invalid collection node pool in \"{file}\".", filePath);
                     return false;

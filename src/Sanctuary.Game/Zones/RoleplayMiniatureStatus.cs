@@ -14,6 +14,14 @@ public enum RoleplayMiniatureCreateResult
     RateLimited
 }
 
+public enum RoleplayMiniatureSpeakResult
+{
+    Success,
+    NotFound,
+    InvalidMessage,
+    RateLimited
+}
+
 public sealed record RoleplayMiniatureStatus(
     int Id,
     ulong Guid,
@@ -29,9 +37,11 @@ public static class RoleplayMiniatureRules
     public const string DefaultGroup = "scene";
     public const int MaximumNameLength = 40;
     public const int MaximumGroupLength = 24;
+    public const int MaximumSpeechLength = 180;
     public const int MaximumPerPlayer = 40;
     public const int MaximumPerZone = 200;
     public static readonly TimeSpan SpawnCooldown = TimeSpan.FromMilliseconds(500);
+    public static readonly TimeSpan SpeechCooldown = TimeSpan.FromSeconds(1);
 
     public static bool IsValidName(string? name)
     {
@@ -61,6 +71,24 @@ public static class RoleplayMiniatureRules
         foreach (var character in normalized)
         {
             if (!char.IsAsciiLetterOrDigit(character) && character is not '-' and not '_')
+                return false;
+        }
+
+        return true;
+    }
+
+    public static bool IsValidSpeech(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+            return false;
+
+        var trimmed = message.Trim();
+        if (trimmed.Length > MaximumSpeechLength)
+            return false;
+
+        foreach (var character in trimmed)
+        {
+            if (char.IsControl(character))
                 return false;
         }
 

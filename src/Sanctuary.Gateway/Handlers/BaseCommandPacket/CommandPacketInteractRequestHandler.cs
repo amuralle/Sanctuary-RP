@@ -74,14 +74,14 @@ public static class CommandPacketInteractRequestHandler
 
         try
         {
-            var roll = Random.Shared.Next(node.TypeDefinition.TotalDropWeight);
-            var drop = node.TypeDefinition.SelectDrop(roll);
+            var roll = Random.Shared.Next(node.PoolDefinition.TotalDropWeight);
+            var drop = node.PoolDefinition.SelectDrop(roll);
             var itemDefinitionId = drop.ItemDefinitionId;
 
             if (!_resourceManager.ClientItemDefinitions.TryGetValue(itemDefinitionId, out var itemDefinition))
             {
-                _logger.LogError("Collection node type {type} references unknown item definition {itemDefinitionId}.",
-                    node.TypeDefinition.Key, itemDefinitionId);
+                _logger.LogError("Collection node pool {pool} references unknown item definition {itemDefinitionId}.",
+                    node.PoolDefinition.Key, itemDefinitionId);
                 node.Release();
                 return true;
             }
@@ -172,6 +172,7 @@ public static class CommandPacketInteractRequestHandler
             }
 
             ownedItemDefinitionIds.Add(itemDefinitionId);
+            var collectionWillBeComplete = collectionMatch?.Definition.IsComplete(ownedItemDefinitionIds) ?? false;
 
             node.CompleteCollection();
             nodeCompleted = true;
@@ -180,12 +181,25 @@ public static class CommandPacketInteractRequestHandler
             {
                 if (collectionWasStarted)
                 {
+                    if (collectionWillBeComplete)
+                    {
+                        // Snapshot-restored placeholders do not reliably transition during the final add.
+                        // Removing the final placeholder first lets the client run its native completion path.
+                        connection.SendTunneled(new ClientUpdatePacketCollectionRemoveEntry
+                        {
+                            CollectionId = collectionMatch.Definition.Id,
+                            EntryId = collectionMatch.Entry.Id
+                        });
+                    }
+
                     SendCollectionEntryUpdate(connection, collectionMatch.Definition,
                         collectionMatch.Entry, collectionMatch.Index);
                 }
                 else
                 {
                     SendCollectionStart(connection, collectionMatch.Definition, ownedItemDefinitionIds);
+                    SendCollectionEntryUpdate(connection, collectionMatch.Definition,
+                        collectionMatch.Entry, collectionMatch.Index);
                 }
             }
             else

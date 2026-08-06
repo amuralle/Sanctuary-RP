@@ -22,6 +22,11 @@ public sealed class CollectionDefinition
         return Entries.Any(entry => ownedItemDefinitionIds.Contains(entry.ItemDefinitionId));
     }
 
+    public bool IsComplete(IReadOnlySet<int> ownedItemDefinitionIds)
+    {
+        return Entries.All(entry => ownedItemDefinitionIds.Contains(entry.ItemDefinitionId));
+    }
+
     public ClientCollection CreateClientCollection(ulong playerGuid, IReadOnlySet<int> ownedItemDefinitionIds)
     {
         var collection = new ClientCollection

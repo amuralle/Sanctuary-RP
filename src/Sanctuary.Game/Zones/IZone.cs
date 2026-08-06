@@ -48,6 +48,8 @@ public interface IZone : IScriptZone
     IReadOnlyList<RoleplayMiniatureStatus> GetRoleplayMiniatureStatuses();
     RoleplayMiniatureCreateResult TryCreateRoleplayMiniature(Player owner, int modelId, string name, string group,
         out RoleplayMiniatureStatus? miniature);
+    RoleplayMiniatureSpeakResult TrySpeakRoleplayMiniature(int id, ulong actorGuid, string message,
+        [MaybeNullWhen(false)] out RoleplayMiniatureStatus miniature);
     bool TryRemoveRoleplayMiniature(int id, [MaybeNullWhen(false)] out RoleplayMiniatureStatus miniature);
     bool TryRemoveNearestRoleplayMiniature(Vector4 position, float radius,
         [MaybeNullWhen(false)] out RoleplayMiniatureStatus miniature);

@@ -182,10 +182,9 @@ public class ResourceManager : IResourceManager
 
         foreach (var type in CollectionNodeTypes.Values)
         {
-            if (!Models.ContainsKey(type.ModelId) ||
-                type.DropTable.Any(drop => !ClientItemDefinitions.ContainsKey(drop.ItemDefinitionId)))
+            if (!Models.ContainsKey(type.ModelId))
             {
-                _logger.LogError("Collection node type {type} has an invalid model or drop reference.", type.Key);
+                _logger.LogError("Collection node type {type} references an unknown model.", type.Key);
                 return false;
             }
         }
@@ -202,9 +201,10 @@ public class ResourceManager : IResourceManager
 
         foreach (var pool in CollectionNodePools.Values)
         {
-            if (!CollectionNodeTypes.ContainsKey(pool.NodeType))
+            if (!CollectionNodeTypes.ContainsKey(pool.NodeType) ||
+                pool.DropTable.Any(drop => !ClientItemDefinitions.ContainsKey(drop.ItemDefinitionId)))
             {
-                _logger.LogError("Collection node pool {pool} references an unknown node type.", pool.Key);
+                _logger.LogError("Collection node pool {pool} has an invalid node type or drop reference.", pool.Key);
                 return false;
             }
         }

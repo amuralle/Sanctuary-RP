@@ -38,4 +38,20 @@ public sealed class RoleplayMiniatureRulesTests
         Assert.IsFalse(RoleplayMiniatureRules.TryNormalizeGroup(
             new string('a', RoleplayMiniatureRules.MaximumGroupLength + 1), out _));
     }
+
+    [TestMethod]
+    public void IsValidSpeech_AcceptsReadableMessages()
+    {
+        Assert.IsTrue(RoleplayMiniatureRules.IsValidSpeech("The bridge is closed."));
+        Assert.IsTrue(RoleplayMiniatureRules.IsValidSpeech("Roll for initiative!"));
+    }
+
+    [TestMethod]
+    public void IsValidSpeech_RejectsBlankMultilineAndOversizedMessages()
+    {
+        Assert.IsFalse(RoleplayMiniatureRules.IsValidSpeech(" "));
+        Assert.IsFalse(RoleplayMiniatureRules.IsValidSpeech("First line\nSecond line"));
+        Assert.IsFalse(RoleplayMiniatureRules.IsValidSpeech(
+            new string('a', RoleplayMiniatureRules.MaximumSpeechLength + 1)));
+    }
 }

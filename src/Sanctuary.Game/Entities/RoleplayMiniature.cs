@@ -1,5 +1,6 @@
 using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
+using Sanctuary.Packet.Common;
 using Sanctuary.Packet.Common.Chat;
 
 namespace Sanctuary.Game.Entities;
@@ -37,5 +38,19 @@ public sealed class RoleplayMiniature : Npc
             effectDelay: 0,
             compositeEffectId: 0,
             duration: 500);
+    }
+
+    internal void Speak(string message)
+    {
+        var packet = new PacketChat
+        {
+            Channel = ChatChannel.WorldSay,
+            FromGuid = Guid,
+            FromName = new NameData { FirstName = Name ?? $"Miniature #{InstanceId}" },
+            Message = message
+        };
+
+        foreach (var player in VisiblePlayers.Values)
+            player.SendTunneled(packet);
     }
 }

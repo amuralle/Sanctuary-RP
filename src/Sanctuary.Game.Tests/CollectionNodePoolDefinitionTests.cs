@@ -15,6 +15,25 @@ namespace Sanctuary.Game.Tests;
 public sealed class CollectionNodePoolDefinitionTests
 {
     [TestMethod]
+    [DataRow(0, 1001)]
+    [DataRow(2, 1001)]
+    [DataRow(3, 1002)]
+    [DataRow(3 + 6, 1002)]
+    [DataRow(3 + 7, 1003)]
+    public void SelectItemDefinitionId_UsesWeightBoundaries(int roll, int expectedItemDefinitionId)
+    {
+        var definition = CreatePool(maxActiveNodes: 1);
+        definition.DropTable =
+        [
+            new CollectionNodeDropDefinition { ItemDefinitionId = 1001, Weight = 3 },
+            new CollectionNodeDropDefinition { ItemDefinitionId = 1002, Weight = 7 },
+            new CollectionNodeDropDefinition { ItemDefinitionId = 1003, Weight = 1 }
+        ];
+
+        Assert.AreEqual(expectedItemDefinitionId, definition.SelectDrop(roll).ItemDefinitionId);
+    }
+
+    [TestMethod]
     public void GetTargetActiveCount_UsesEveryHardPointWhenUncapped()
     {
         var pool = CreatePool(maxActiveNodes: 0);
@@ -37,7 +56,30 @@ public sealed class CollectionNodePoolDefinitionTests
         var path = Path.Combine(Path.GetTempPath(), $"collection-node-pools-{Guid.NewGuid():N}.json");
         File.WriteAllText(path,
             "[{\"Key\":\"test\",\"ZoneDefinitionId\":1,\"NodeType\":\"mushrooms\"," +
-            "\"MaxActiveNodes\":-1,\"RespawnSeconds\":30}]");
+            "\"MaxActiveNodes\":-1,\"RespawnSeconds\":30," +
+            "\"DropTable\":[{\"ItemDefinitionId\":1001,\"Weight\":1}]}]");
+
+        try
+        {
+            var definitions = new CollectionNodePoolDefinitionCollection(NullLogger.Instance);
+
+            Assert.IsFalse(definitions.Load(path));
+            Assert.AreEqual(0, definitions.Count);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
+    public void Load_RejectsNonPositiveDropWeight()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"collection-node-pools-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path,
+            "[{\"Key\":\"test\",\"ZoneDefinitionId\":1,\"NodeType\":\"mushrooms\"," +
+            "\"MaxActiveNodes\":1,\"RespawnSeconds\":30," +
+            "\"DropTable\":[{\"ItemDefinitionId\":1001,\"Weight\":0}]}]");
 
         try
         {
@@ -58,7 +100,8 @@ public sealed class CollectionNodePoolDefinitionTests
         var path = Path.Combine(Path.GetTempPath(), $"collection-node-pools-{Guid.NewGuid():N}.json");
         File.WriteAllText(path,
             "[{\"Key\":\"test\",\"ZoneDefinitionId\":1,\"NodeType\":\"mushrooms\"," +
-            "\"MaxActiveNodes\":0,\"RespawnSeconds\":30}]");
+            "\"MaxActiveNodes\":0,\"RespawnSeconds\":30," +
+            "\"DropTable\":[{\"ItemDefinitionId\":1001,\"Weight\":1}]}]");
 
         try
         {
@@ -86,9 +129,11 @@ public sealed class CollectionNodePoolDefinitionTests
         var path = Path.Combine(Path.GetTempPath(), $"collection-node-pools-{Guid.NewGuid():N}.json");
         File.WriteAllText(path,
             "[{\"Key\":\"briarwood-mushrooms\",\"ZoneDefinitionId\":1," +
-            "\"NodeType\":\"mushrooms\",\"MaxActiveNodes\":12,\"RespawnSeconds\":60}," +
+            "\"NodeType\":\"mushrooms\",\"MaxActiveNodes\":12,\"RespawnSeconds\":60," +
+            "\"DropTable\":[{\"ItemDefinitionId\":1001,\"Weight\":1}]}," +
             "{\"Key\":\"briarwood-mushrooms-rare\",\"ZoneDefinitionId\":1," +
-            "\"NodeType\":\"rare-mushrooms\",\"MaxActiveNodes\":2,\"RespawnSeconds\":300}]");
+            "\"NodeType\":\"rare-mushrooms\",\"MaxActiveNodes\":2,\"RespawnSeconds\":300," +
+            "\"DropTable\":[{\"ItemDefinitionId\":1002,\"Weight\":1}]}]");
 
         try
         {
@@ -190,7 +235,11 @@ public sealed class CollectionNodePoolDefinitionTests
         {
             Key = "briarwood-mushrooms",
             NodeType = "mushrooms",
-            MaxActiveNodes = maxActiveNodes
+            MaxActiveNodes = maxActiveNodes,
+            DropTable =
+            [
+                new CollectionNodeDropDefinition { ItemDefinitionId = 1001 }
+            ]
         };
     }
 }

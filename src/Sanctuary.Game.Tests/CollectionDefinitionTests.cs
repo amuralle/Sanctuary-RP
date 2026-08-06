@@ -36,4 +36,20 @@ public sealed class CollectionDefinitionTests
         Assert.AreEqual(10, clientCollection.Entries[1].CollectionId);
         Assert.AreEqual(123ul, clientCollection.PlayerGuid);
     }
+
+    [TestMethod]
+    public void IsComplete_RequiresEveryEntryItem()
+    {
+        var definition = new CollectionDefinition
+        {
+            Entries =
+            [
+                new CollectionEntryDefinition { ItemDefinitionId = 11081 },
+                new CollectionEntryDefinition { ItemDefinitionId = 11082 }
+            ]
+        };
+
+        Assert.IsFalse(definition.IsComplete(new HashSet<int> { 11081 }));
+        Assert.IsTrue(definition.IsComplete(new HashSet<int> { 11081, 11082 }));
+    }
 }
