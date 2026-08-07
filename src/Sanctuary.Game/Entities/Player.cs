@@ -26,6 +26,8 @@ public sealed class Player : ClientPcData, IEntity
     private readonly IResourceManager _resourceManager;
 
     public bool Visible { get; set; }
+    public bool RoleplayHidden { get; private set; }
+    public int RoleplayTemporaryAppearance { get; private set; }
 
     public IZone Zone { get; set; }
     public ZoneTile ZoneTile { get; private set; } = ZoneTile.Empty;
@@ -157,13 +159,51 @@ public sealed class Player : ClientPcData, IEntity
 
         Mount?.UpdatePosition(position, rotation, updateZoneArea);
 
-        if (Visible)
+        if (Visible || RoleplayHidden)
         {
             UpdateZoneTile();
 
             if (updateZoneArea)
                 UpdateZoneArea();
         }
+    }
+
+    public void SetRoleplayTemporaryAppearance(int modelId)
+    {
+        RoleplayTemporaryAppearance = modelId;
+        SendTunneledToVisible(new PlayerUpdatePacketUpdateTemporaryAppearance
+        {
+            TemporaryAppearance = modelId,
+            Guid = Guid
+        }, sendToSelf: true);
+    }
+
+    public void ClearRoleplayTemporaryAppearance()
+    {
+        RoleplayTemporaryAppearance = 0;
+        SendTunneledToVisible(new PlayerUpdatePacketRemoveTemporaryAppearance
+        {
+            Guid = Guid
+        }, sendToSelf: true);
+    }
+
+    public bool SetRoleplayVisibility(bool visible)
+    {
+        if (RoleplayHidden == !visible)
+            return false;
+
+        RoleplayHidden = !visible;
+        Visible = visible;
+
+        foreach (var player in VisiblePlayers.Values)
+        {
+            if (visible)
+                player.OnAddVisiblePlayers([this]);
+            else
+                player.OnRemoveVisiblePlayers([this]);
+        }
+
+        return true;
     }
 
     private void UpdateZoneTile()
@@ -209,6 +249,8 @@ public sealed class Player : ClientPcData, IEntity
 
         // Teleport to new zone
 
+        // Hidden rigging mode is local to a scene and resets when the player changes zones.
+        RoleplayHidden = false;
         Visible = false;
 
         Zone = zone;
@@ -538,7 +580,7 @@ public sealed class Player : ClientPcData, IEntity
             IsUnderage = Age < 18,
             IsMember = MembershipStatus != 0,
 
-            // playerUpdatePacketAddPc.TemporaryAppearance = 277;
+            TemporaryAppearance = RoleplayTemporaryAppearance,
 
             ActiveProfileId = ActiveProfileId,
 

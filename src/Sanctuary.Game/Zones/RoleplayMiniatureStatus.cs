@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Numerics;
 
 namespace Sanctuary.Game.Zones;
@@ -22,6 +23,21 @@ public enum RoleplayMiniatureSpeakResult
     RateLimited
 }
 
+public enum RoleplayMiniatureMoveResult
+{
+    Success,
+    NotFound,
+    TooFar,
+    RateLimited
+}
+
+public enum RoleplayMiniatureEmoteResult
+{
+    Success,
+    NotFound,
+    RateLimited
+}
+
 public sealed record RoleplayMiniatureStatus(
     int Id,
     ulong Guid,
@@ -40,8 +56,33 @@ public static class RoleplayMiniatureRules
     public const int MaximumSpeechLength = 180;
     public const int MaximumPerPlayer = 40;
     public const int MaximumPerZone = 200;
+    public const float MaximumMovementDistance = 250f;
+    public const float MovementSpeed = 6.25f;
+    public const float WaypointTolerance = 0.25f;
     public static readonly TimeSpan SpawnCooldown = TimeSpan.FromMilliseconds(500);
     public static readonly TimeSpan SpeechCooldown = TimeSpan.FromSeconds(1);
+    public static readonly TimeSpan MovementCooldown = TimeSpan.FromMilliseconds(500);
+    public static readonly TimeSpan EmoteCooldown = TimeSpan.FromMilliseconds(500);
+
+    public static IReadOnlyDictionary<string, int> Emotes { get; } = new Dictionary<string, int>(
+        StringComparer.OrdinalIgnoreCase)
+    {
+        ["cheer"] = 3306,
+        ["confused"] = 3307,
+        ["dance"] = 3201,
+        ["exclaim"] = 3103,
+        ["give"] = 3314,
+        ["inquire"] = 3102,
+        ["pose"] = 3251,
+        ["pose2"] = 3252,
+        ["receive"] = 3323,
+        ["shrug"] = 3326,
+        ["talk"] = 3101,
+        ["taunt"] = 3330,
+        ["thanks"] = 3331,
+        ["wave"] = 3333,
+        ["yawn"] = 3334
+    };
 
     public static bool IsValidName(string? name)
     {
@@ -93,5 +134,10 @@ public static class RoleplayMiniatureRules
         }
 
         return true;
+    }
+
+    public static bool IsMovementWithinLimit(Vector3 origin, Vector3 destination)
+    {
+        return Vector3.DistanceSquared(origin, destination) <= MaximumMovementDistance * MaximumMovementDistance;
     }
 }

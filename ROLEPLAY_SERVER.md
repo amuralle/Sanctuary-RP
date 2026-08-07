@@ -73,6 +73,11 @@ organized into optional groups:
 !mini models * 2
 !mini list @enemies
 !mini info nearest
+!mini move #1 here
+!mini move #1 120.5 32.0 -84.25 direct
+!mini stop #1
+!mini emote #1 wave
+!mini emotes
 !mini groups
 !mini remove #1
 !mini remove nearest 20
@@ -85,6 +90,18 @@ organized into optional groups:
 Clicking a miniature reports its ID, model, group, and original owner. Any player
 can remove any roleplay miniature, but these commands cannot remove built-in world
 NPCs, mounts, or collection nodes. A zone restart clears all miniatures.
+
+Admins also have session-only DM presentation controls. Model IDs use the same
+catalog as miniature spawning, and invisible mode hides the DM from other players
+without removing the DM's own view of the scene:
+
+```text
+!dm model 176
+!dm model reset
+!dm invisible on
+!dm invisible off
+!dm status
+```
 
 The searchable model guide and complete CSV catalog can be regenerated from the
 current client resources:

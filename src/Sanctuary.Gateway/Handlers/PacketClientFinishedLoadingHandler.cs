@@ -23,7 +23,7 @@ public static class PacketClientFinishedLoadingHandler
     {
         _logger.LogTrace("Received {name} packet.", nameof(PacketClientFinishedLoading));
 
-        connection.Player.Visible = true;
+        connection.Player.Visible = !connection.Player.RoleplayHidden;
 
         if (connection.Player.Mount is not null)
             connection.Player.Mount.Visible = true;

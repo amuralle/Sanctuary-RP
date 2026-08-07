@@ -42,6 +42,34 @@
     "description": "Sends local chat from the miniature so nearby players see its name and speech bubble."
   },
   {
+    "id": "move",
+    "task": "Move a miniature",
+    "syntax": "!mini move [#id|nearest] [here|x y z] [direct]",
+    "example": "!mini move #3 here",
+    "description": "Walks a miniature to your position or supplied coordinates. Add direct to bypass mapped pathfinding for unusual terrain."
+  },
+  {
+    "id": "stop",
+    "task": "Stop a miniature",
+    "syntax": "!mini stop [#id|nearest]",
+    "example": "!mini stop nearest",
+    "description": "Clears the selected miniature's current route immediately."
+  },
+  {
+    "id": "emote",
+    "task": "Animate a miniature",
+    "syntax": "!mini emote [#id|nearest] [emote]",
+    "example": "!mini emote #3 wave",
+    "description": "Plays a client-supported emote on the miniature. Animation support varies by model."
+  },
+  {
+    "id": "emotes",
+    "task": "List miniature emotes",
+    "syntax": "!mini emotes",
+    "example": "!mini emotes",
+    "description": "Lists the client-validated emote names accepted by the miniature command."
+  },
+  {
     "id": "groups",
     "task": "Summarize scene groups",
     "syntax": "!mini groups",
@@ -61,6 +89,27 @@
     "syntax": "!mini clear [all|mine|@group|nearby] [radius]",
     "example": "!mini clear @enemies",
     "description": "Removes a selected set of player-created miniatures. It never removes normal world NPCs."
+  },
+  {
+    "id": "dm-model",
+    "task": "Use a model as the DM",
+    "syntax": "!dm model [modelId|reset]",
+    "example": "!dm model 176",
+    "description": "Admin only. Temporarily presents your player as a client model; reset restores your character."
+  },
+  {
+    "id": "dm-invisible",
+    "task": "Hide while rigging",
+    "syntax": "!dm invisible [on|off|toggle]",
+    "example": "!dm invisible on",
+    "description": "Admin only. Hides your player from everyone else while leaving your own scene view and controls active."
+  },
+  {
+    "id": "dm-status",
+    "task": "Check DM presentation",
+    "syntax": "!dm status",
+    "example": "!dm status",
+    "description": "Admin only. Reports your current model override and whether other players can see you."
   },
   {
     "id": "volunteer-help",

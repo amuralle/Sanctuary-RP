@@ -17,6 +17,7 @@ using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Game.Resources.Definitions.Zones;
 using Sanctuary.Scripting;
 using Sanctuary.UdpLibrary;
+using Sanctuary.Game.Pathfinding;
 
 namespace Sanctuary.Game.Zones;
 
@@ -41,10 +42,15 @@ public abstract class BaseZone : IZone, IDisposable
     private readonly object _roleplayMiniatureLock = new();
     private readonly Dictionary<ulong, long> _roleplayMiniatureSpawnTimes = new();
     private readonly Dictionary<ulong, long> _roleplayMiniatureSpeechTimes = new();
+    private readonly Dictionary<ulong, long> _roleplayMiniatureMovementTimes = new();
+    private readonly Dictionary<ulong, long> _roleplayMiniatureEmoteTimes = new();
     private int _nextRoleplayMiniatureId = 1;
 
     private const int FrameRate = 10;
     private const float TickRate = 1000f / FrameRate;
+
+    public float TickDeltaSeconds => 1f / FrameRate;
+
     private const ulong NpcBaseGuid = 100_000_000_000u;
 
     private readonly record struct CollectionNodePoolRefill(string PoolKey, int CollectedHardPointId);
@@ -64,6 +70,8 @@ public abstract class BaseZone : IZone, IDisposable
     public IEnumerable<Player> Players => _players.Values;
 
     private ScriptContext? _scriptContext;
+
+    public Pathfinder<MapNode>? Pathfinder { get; }
 
     protected BaseZone(BaseZoneDefinition zoneDefinition, IServiceProvider serviceProvider)
     {
@@ -88,6 +96,10 @@ public abstract class BaseZone : IZone, IDisposable
 
         Task.Factory.StartNew(UpdateEveryTickAsync, _cancellationTokenSource.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         Task.Factory.StartNew(UpdateEverySecondAsync, _cancellationTokenSource.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
+        // Just in case we don't actually have the `.map` file for a particular zone.
+        if (_resourceManager.Maps.TryGetValue(Name, out var mapGraph))
+            Pathfinder = new Pathfinder<MapNode>(mapGraph.Nodes, _logger);
     }
 
     #region Events
@@ -608,7 +620,10 @@ public abstract class BaseZone : IZone, IDisposable
                 CursorId = 18,
                 InteractRange = 15,
                 IsInteractable = true,
-                Static = true,
+                MovementType = 2,
+                Speed = RoleplayMiniatureRules.MovementSpeed,
+                WaypointTolerance = RoleplayMiniatureRules.WaypointTolerance,
+                Static = false,
                 Visible = true
             };
 
@@ -679,6 +694,90 @@ public abstract class BaseZone : IZone, IDisposable
             miniature = ToRoleplayMiniatureStatus(entity);
             entity.Speak(message);
             return RoleplayMiniatureSpeakResult.Success;
+        }
+    }
+
+    public RoleplayMiniatureMoveResult TryMoveRoleplayMiniature(int id, ulong actorGuid, Vector3 destination,
+        bool direct, [MaybeNullWhen(false)] out RoleplayMiniatureStatus miniature)
+    {
+        lock (_roleplayMiniatureLock)
+        {
+            miniature = null!;
+
+            var entity = _npcs.Values
+                .OfType<RoleplayMiniature>()
+                .FirstOrDefault(candidate => candidate.InstanceId == id);
+
+            if (entity is null)
+                return RoleplayMiniatureMoveResult.NotFound;
+
+            var currentPosition = new Vector3(entity.Position.X, entity.Position.Y, entity.Position.Z);
+            if (!RoleplayMiniatureRules.IsMovementWithinLimit(currentPosition, destination))
+                return RoleplayMiniatureMoveResult.TooFar;
+
+            var now = Stopwatch.GetTimestamp();
+            var cooldownTicks = RoleplayMiniatureRules.MovementCooldown.TotalSeconds * Stopwatch.Frequency;
+
+            if (_roleplayMiniatureMovementTimes.TryGetValue(actorGuid, out var previousMovement) &&
+                now - previousMovement < cooldownTicks)
+            {
+                return RoleplayMiniatureMoveResult.RateLimited;
+            }
+
+            _roleplayMiniatureMovementTimes[actorGuid] = now;
+            miniature = ToRoleplayMiniatureStatus(entity);
+            entity.MoveTo(destination, direct, forceRecompute: true);
+            return RoleplayMiniatureMoveResult.Success;
+        }
+    }
+
+    public bool TryStopRoleplayMiniature(int id, [MaybeNullWhen(false)] out RoleplayMiniatureStatus miniature)
+    {
+        lock (_roleplayMiniatureLock)
+        {
+            var entity = _npcs.Values
+                .OfType<RoleplayMiniature>()
+                .FirstOrDefault(candidate => candidate.InstanceId == id);
+
+            if (entity is null)
+            {
+                miniature = null;
+                return false;
+            }
+
+            entity.StopMoving();
+            miniature = ToRoleplayMiniatureStatus(entity);
+            return true;
+        }
+    }
+
+    public RoleplayMiniatureEmoteResult TryEmoteRoleplayMiniature(int id, ulong actorGuid, int animationId,
+        [MaybeNullWhen(false)] out RoleplayMiniatureStatus miniature)
+    {
+        lock (_roleplayMiniatureLock)
+        {
+            miniature = null!;
+
+            var entity = _npcs.Values
+                .OfType<RoleplayMiniature>()
+                .FirstOrDefault(candidate => candidate.InstanceId == id);
+
+            if (entity is null)
+                return RoleplayMiniatureEmoteResult.NotFound;
+
+            var now = Stopwatch.GetTimestamp();
+            var cooldownTicks = RoleplayMiniatureRules.EmoteCooldown.TotalSeconds * Stopwatch.Frequency;
+
+            if (_roleplayMiniatureEmoteTimes.TryGetValue(actorGuid, out var previousEmote) &&
+                now - previousEmote < cooldownTicks)
+            {
+                return RoleplayMiniatureEmoteResult.RateLimited;
+            }
+
+            _roleplayMiniatureEmoteTimes[actorGuid] = now;
+            miniature = ToRoleplayMiniatureStatus(entity);
+            entity.Emote(animationId);
+            return RoleplayMiniatureEmoteResult.Success;
         }
     }
 
@@ -901,6 +1000,14 @@ public abstract class BaseZone : IZone, IDisposable
         {
             foreach (var zoneTileEntity in zoneTile.Entities)
             {
+                if (zoneTileEntity.Value is Player { RoleplayHidden: true } hiddenObserver && entity.Visible)
+                {
+                    if (entity is Npc enteringNpc)
+                        hiddenObserver.OnAddVisibleNpcs(enteringNpc);
+                    else if (entity is Player enteringPlayer)
+                        hiddenObserver.OnAddVisiblePlayers(enteringPlayer);
+                }
+
                 if (!zoneTileEntity.Value.Visible || entity == zoneTileEntity.Value)
                     continue;
 
@@ -910,7 +1017,7 @@ public abstract class BaseZone : IZone, IDisposable
                         {
                             npcsToAdd.Add(zoneTileNpc);
 
-                            if (entity.Visible)
+                            if (entity.Visible || entity is Player { RoleplayHidden: true })
                             {
                                 switch (entity)
                                 {
@@ -963,6 +1070,14 @@ public abstract class BaseZone : IZone, IDisposable
         {
             foreach (var zoneTileEntity in zoneTile.Entities)
             {
+                if (zoneTileEntity.Value is Player { RoleplayHidden: true } hiddenObserver && entity.Visible)
+                {
+                    if (entity is Npc leavingNpc)
+                        hiddenObserver.OnRemoveVisibleNpcs(leavingNpc);
+                    else if (entity is Player leavingPlayer)
+                        hiddenObserver.OnRemoveVisiblePlayers(leavingPlayer);
+                }
+
                 if (!zoneTileEntity.Value.Visible || entity == zoneTileEntity.Value)
                     continue;
 
@@ -972,7 +1087,7 @@ public abstract class BaseZone : IZone, IDisposable
                         {
                             npcsToRemove.Add(zoneTileNpc);
 
-                            if (entity.Visible)
+                            if (entity.Visible || entity is Player { RoleplayHidden: true })
                             {
                                 switch (entity)
                                 {

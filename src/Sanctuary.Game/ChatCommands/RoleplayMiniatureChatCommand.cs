@@ -22,7 +22,7 @@ public sealed class RoleplayMiniatureChatCommand : IChatCommand
     private readonly IResourceManager _resourceManager;
 
     public string KeyWord => "mini";
-    public string Usage => "help | spawn | models | list | info | say | groups | remove | clear";
+    public string Usage => "help | spawn | models | list | info | move | stop | say | emote | emotes | groups | remove | clear";
     public string Description => "Manage shared roleplay miniatures.";
     public ChatCommandRole RequiredRole => ChatCommandRole.Player;
 
@@ -61,6 +61,18 @@ public sealed class RoleplayMiniatureChatCommand : IChatCommand
                 break;
             case "say":
                 Say(invoker, commandArgs);
+                break;
+            case "move":
+                Move(invoker, commandArgs);
+                break;
+            case "stop":
+                Stop(invoker, commandArgs);
+                break;
+            case "emote":
+                Emote(invoker, commandArgs);
+                break;
+            case "emotes":
+                ListEmotes(invoker, commandArgs);
                 break;
             case "groups":
                 ListGroups(invoker);
@@ -363,6 +375,118 @@ public sealed class RoleplayMiniatureChatCommand : IChatCommand
         }
     }
 
+    private void Move(Player invoker, string[] args)
+    {
+        if (args.Length < 2 || !TryResolveMiniatureId(invoker, args[0], out var id))
+        {
+            SendSystemMessage(invoker,
+                "Usage: !mini move [#id|nearest] [here|x y z] [direct]");
+            return;
+        }
+
+        var direct = args[^1].Equals("direct", StringComparison.OrdinalIgnoreCase);
+        Vector3 destination;
+
+        if (args[1].Equals("here", StringComparison.OrdinalIgnoreCase) && args.Length == (direct ? 3 : 2))
+        {
+            destination = new Vector3(invoker.Position.X, invoker.Position.Y, invoker.Position.Z);
+        }
+        else if (args.Length == (direct ? 5 : 4) &&
+            float.TryParse(args[1], out var x) &&
+            float.TryParse(args[2], out var y) &&
+            float.TryParse(args[3], out var z))
+        {
+            destination = new Vector3(x, y, z);
+        }
+        else
+        {
+            SendSystemMessage(invoker,
+                "Usage: !mini move [#id|nearest] [here|x y z] [direct]");
+            return;
+        }
+
+        var result = invoker.Zone.TryMoveRoleplayMiniature(
+            id, invoker.Guid, destination, direct, out var miniature);
+
+        switch (result)
+        {
+            case RoleplayMiniatureMoveResult.Success:
+                _chatCommandManager.LogAction(this, invoker, "Move", $"#{miniature.Id} {miniature.Name}",
+                    $"destination=({destination.X:0.##},{destination.Y:0.##},{destination.Z:0.##}), direct={direct}");
+                SendSystemMessage(invoker,
+                    $"Moving #{miniature.Id} {miniature.Name}{(direct ? " directly" : string.Empty)}.");
+                break;
+            case RoleplayMiniatureMoveResult.NotFound:
+                SendSystemMessage(invoker, $"No miniature #{id} exists in this zone.");
+                break;
+            case RoleplayMiniatureMoveResult.TooFar:
+                SendSystemMessage(invoker,
+                    $"A miniature can move at most {RoleplayMiniatureRules.MaximumMovementDistance:0}m per command.");
+                break;
+            case RoleplayMiniatureMoveResult.RateLimited:
+                SendSystemMessage(invoker, "Please wait a moment before moving another miniature.");
+                break;
+        }
+    }
+
+    private void Stop(Player invoker, string[] args)
+    {
+        if (args.Length != 1 || !TryResolveMiniatureId(invoker, args[0], out var id))
+        {
+            SendSystemMessage(invoker, "Usage: !mini stop [#id|nearest]");
+            return;
+        }
+
+        if (!invoker.Zone.TryStopRoleplayMiniature(id, out var miniature))
+        {
+            SendSystemMessage(invoker, $"No miniature #{id} exists in this zone.");
+            return;
+        }
+
+        LogAction(invoker, "Stop", miniature);
+        SendSystemMessage(invoker, $"Stopped #{miniature.Id} {miniature.Name}.");
+    }
+
+    private void Emote(Player invoker, string[] args)
+    {
+        if (args.Length != 2 ||
+            !TryResolveMiniatureId(invoker, args[0], out var id) ||
+            !RoleplayMiniatureRules.Emotes.TryGetValue(args[1], out var animationId))
+        {
+            SendSystemMessage(invoker, "Usage: !mini emote [#id|nearest] [emote]");
+            return;
+        }
+
+        var result = invoker.Zone.TryEmoteRoleplayMiniature(
+            id, invoker.Guid, animationId, out var miniature);
+
+        switch (result)
+        {
+            case RoleplayMiniatureEmoteResult.Success:
+                _chatCommandManager.LogAction(
+                    this, invoker, "Emote", $"#{miniature.Id} {miniature.Name}", $"emote={args[1]}");
+                break;
+            case RoleplayMiniatureEmoteResult.NotFound:
+                SendSystemMessage(invoker, $"No miniature #{id} exists in this zone.");
+                break;
+            case RoleplayMiniatureEmoteResult.RateLimited:
+                SendSystemMessage(invoker, "Please wait a moment before animating another miniature.");
+                break;
+        }
+    }
+
+    private void ListEmotes(Player invoker, string[] args)
+    {
+        if (args.Length != 0)
+        {
+            SendSystemMessage(invoker, "Usage: !mini emotes");
+            return;
+        }
+
+        SendSystemMessage(invoker,
+            $"Miniature emotes:\n{string.Join(", ", RoleplayMiniatureRules.Emotes.Keys.Order())}");
+    }
+
     private void Remove(Player invoker, string[] args)
     {
         if (args.Length is < 1 or > 2)
@@ -450,6 +574,21 @@ public sealed class RoleplayMiniatureChatCommand : IChatCommand
         return int.TryParse(argument.AsSpan(argument.StartsWith('#') ? 1 : 0), out id) && id > 0;
     }
 
+    private static bool TryResolveMiniatureId(Player invoker, string argument, out int id)
+    {
+        if (argument.Equals("nearest", StringComparison.OrdinalIgnoreCase))
+        {
+            var nearest = invoker.Zone.GetRoleplayMiniatureStatuses()
+                .OrderBy(candidate => DistanceSquared(candidate.Position, invoker.Position))
+                .FirstOrDefault();
+
+            id = nearest?.Id ?? 0;
+            return nearest is not null;
+        }
+
+        return TryParseId(argument, out id);
+    }
+
     private static bool TryParseRadius(string[] args, int index, out float radius)
     {
         radius = DefaultRemovalRadius;
@@ -475,7 +614,11 @@ public sealed class RoleplayMiniatureChatCommand : IChatCommand
             "!mini models [search|*] [page]\n" +
             "!mini list [all|mine|@group] [page]\n" +
             "!mini info [#id|nearest]\n" +
+            "!mini move [#id|nearest] [here|x y z] [direct]\n" +
+            "!mini stop [#id|nearest]\n" +
             "!mini say [#id|nearest] [message]\n" +
+            "!mini emote [#id|nearest] [emote]\n" +
+            "!mini emotes\n" +
             "!mini groups\n" +
             "!mini remove [#id|nearest] [radius]\n" +
             "!mini clear [all|mine|@group|nearby] [radius]");

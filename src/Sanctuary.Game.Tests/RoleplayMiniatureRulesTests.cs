@@ -1,3 +1,5 @@
+using System.Numerics;
+
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Sanctuary.Game.Zones;
@@ -53,5 +55,24 @@ public sealed class RoleplayMiniatureRulesTests
         Assert.IsFalse(RoleplayMiniatureRules.IsValidSpeech("First line\nSecond line"));
         Assert.IsFalse(RoleplayMiniatureRules.IsValidSpeech(
             new string('a', RoleplayMiniatureRules.MaximumSpeechLength + 1)));
+    }
+
+    [TestMethod]
+    public void IsMovementWithinLimit_AcceptsBoundaryAndRejectsLongMove()
+    {
+        var origin = Vector3.Zero;
+
+        Assert.IsTrue(RoleplayMiniatureRules.IsMovementWithinLimit(
+            origin, new Vector3(RoleplayMiniatureRules.MaximumMovementDistance, 0f, 0f)));
+        Assert.IsFalse(RoleplayMiniatureRules.IsMovementWithinLimit(
+            origin, new Vector3(RoleplayMiniatureRules.MaximumMovementDistance + 0.01f, 0f, 0f)));
+    }
+
+    [TestMethod]
+    public void Emotes_UseClientAnimationGroupIds()
+    {
+        Assert.AreEqual(3333, RoleplayMiniatureRules.Emotes["wave"]);
+        Assert.AreEqual(3306, RoleplayMiniatureRules.Emotes["cheer"]);
+        Assert.AreEqual(3201, RoleplayMiniatureRules.Emotes["dance"]);
     }
 }

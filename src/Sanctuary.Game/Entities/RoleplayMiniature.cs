@@ -53,4 +53,16 @@ public sealed class RoleplayMiniature : Npc
         foreach (var player in VisiblePlayers.Values)
             player.SendTunneled(packet);
     }
+
+    internal void Emote(int animationId)
+    {
+        var packet = new PlayerUpdatePacketSetAnimation
+        {
+            Guid = Guid,
+            AnimationId = animationId
+        };
+
+        foreach (var player in VisiblePlayers.Values)
+            player.SendTunneled(packet);
+    }
 }
