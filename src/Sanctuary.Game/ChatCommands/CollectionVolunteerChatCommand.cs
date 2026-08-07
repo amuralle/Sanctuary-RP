@@ -84,6 +84,7 @@ public sealed class CollectionVolunteerChatCommand : IChatCommand
         var poolKey = CollectionVolunteerStore.NormalizePool(args[0]);
         if (!invoker.Zone.GetCollectionNodePoolStatuses().Any(pool => pool.Key == poolKey))
         {
+            LogPlacementFailure(invoker, poolKey, "unknown-pool");
             ChatHelper.SendSystemMessage(invoker,
                 "Unknown pool in this zone. Use !volunteer pools to see available pools.");
             return;
@@ -94,6 +95,7 @@ public sealed class CollectionVolunteerChatCommand : IChatCommand
 
         if (userId == 0)
         {
+            LogPlacementFailure(invoker, poolKey, "account-not-found");
             ChatHelper.SendSystemMessage(invoker, "Your account could not be identified for this submission.");
             return;
         }
@@ -117,6 +119,7 @@ public sealed class CollectionVolunteerChatCommand : IChatCommand
         var result = _store.TryAdd(placement, out var stored);
         if (result != CollectionVolunteerAddResult.Success || stored is null)
         {
+            LogPlacementFailure(invoker, poolKey, result.ToString());
             ChatHelper.SendSystemMessage(invoker, GetAddFailureMessage(result));
             return;
         }
@@ -126,6 +129,7 @@ public sealed class CollectionVolunteerChatCommand : IChatCommand
             stored.Pool, invoker.Position, heading, out var spawn, out var activated))
         {
             _store.TryDelete(stored.Id, stored.SubmittedByUserId, actorIsAdmin: false);
+            LogPlacementFailure(invoker, poolKey, "live-node-creation-failed");
             ChatHelper.SendSystemMessage(invoker,
                 "The location was not saved because its live collection node could not be created.");
             return;
@@ -136,6 +140,7 @@ public sealed class CollectionVolunteerChatCommand : IChatCommand
         {
             invoker.Zone.TryRemoveCollectionNodeSpawn(spawn.Id, out _);
             _store.TryDelete(stored.Id, stored.SubmittedByUserId, actorIsAdmin: false);
+            LogPlacementFailure(invoker, poolKey, "hardpoint-link-failed");
             ChatHelper.SendSystemMessage(invoker,
                 "The location was not saved because its live node could not be linked to the submission.");
             return;
@@ -152,6 +157,16 @@ public sealed class CollectionVolunteerChatCommand : IChatCommand
         ChatHelper.SendSystemMessage(invoker,
             $"Submitted {stored.Pool} location #{stored.Id} and placed live hard point #{spawn.Id}; " +
             (activated ? "the node is active now." : "the node is saved but the pool is at capacity."));
+    }
+
+    private void LogPlacementFailure(Player invoker, string poolKey, string reason)
+    {
+        _chatCommandManager.LogAction(
+            this,
+            invoker,
+            "Reject placement",
+            poolKey,
+            $"reason={reason}, zone={invoker.Zone.DefinitionId}");
     }
 
     private static string GetAddFailureMessage(CollectionVolunteerAddResult result)

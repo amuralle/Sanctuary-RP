@@ -105,5 +105,89 @@
     "CursorId": 18,
     "PlacementYOffset": -0.05,
     "SubTextNameId": -2118222202
+  },
+  {
+    "Key": "shells",
+    "Name": "Pile of Shells",
+    "ModelId": 317,
+    "Scale": 1.0,
+    "CompositeEffectId": 5742,
+    "InteractRange": 12,
+    "CursorId": 18,
+    "PlacementYOffset": -0.05
+  },
+  {
+    "Key": "rare-shells",
+    "Name": "Rare Pile of Shells",
+    "ModelId": 672,
+    "Scale": 1.0,
+    "CompositeEffectId": 5740,
+    "InteractRange": 12,
+    "CursorId": 18,
+    "PlacementYOffset": -0.05,
+    "SubTextNameId": -2118222202
+  },
+  {
+    "Key": "shrouded-glade-elite-coin",
+    "Name": "Shrouded Glade Elite Exploration Coin",
+    "ModelId": 953,
+    "Scale": 1.0,
+    "CompositeEffectId": 5742,
+    "InteractRange": 12,
+    "CursorId": 18,
+    "PlacementYOffset": 0.75
+  },
+  {
+    "Key": "shrouded-glade-rare-coin",
+    "Name": "Shrouded Glade Rare Exploration Coin",
+    "ModelId": 953,
+    "Scale": 1.0,
+    "CompositeEffectId": 5740,
+    "InteractRange": 12,
+    "CursorId": 18,
+    "PlacementYOffset": 0.75,
+    "SubTextNameId": -2118222202
+  },
+  {
+    "Key": "leaves",
+    "Name": "Pile of Leaves",
+    "ModelId": 326,
+    "Scale": 1.0,
+    "CompositeEffectId": 5742,
+    "InteractRange": 12,
+    "CursorId": 18,
+    "PlacementYOffset": -0.05
+  },
+  {
+    "Key": "rare-leaves",
+    "Name": "Rare Pile of Leaves",
+    "ModelId": 650,
+    "Scale": 1.0,
+    "CompositeEffectId": 5740,
+    "InteractRange": 12,
+    "CursorId": 18,
+    "PlacementYOffset": -0.05,
+    "SubTextNameId": -2118222202
+  },
+  {
+    "Key": "snowhill-elite-coin",
+    "Name": "Snowhill Elite Exploration Coin",
+    "ModelId": 818,
+    "Scale": 1.0,
+    "CompositeEffectId": 5742,
+    "InteractRange": 12,
+    "CursorId": 18,
+    "PlacementYOffset": 0.75
+  },
+  {
+    "Key": "snowhill-rare-coin",
+    "Name": "Snowhill Rare Exploration Coin",
+    "ModelId": 818,
+    "Scale": 1.0,
+    "CompositeEffectId": 5740,
+    "InteractRange": 12,
+    "CursorId": 18,
+    "PlacementYOffset": 0.75,
+    "SubTextNameId": -2118222202
   }
 ]

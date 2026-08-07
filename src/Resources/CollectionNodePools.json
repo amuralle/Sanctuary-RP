@@ -98,12 +98,12 @@
     "MaxActiveNodes": 0,
     "RespawnSeconds": 5,
     "DropTable": [
-      { "ItemDefinitionId": 3935, "Weight": 100 },
-      { "ItemDefinitionId": 3936, "Weight": 100 },
-      { "ItemDefinitionId": 3937, "Weight": 100 },
-      { "ItemDefinitionId": 3938, "Weight": 100 },
-      { "ItemDefinitionId": 3939, "Weight": 100 },
-      { "ItemDefinitionId": 3940, "Weight": 100 }
+      { "ItemDefinitionId": 3943, "Weight": 100 },
+      { "ItemDefinitionId": 3944, "Weight": 100 },
+      { "ItemDefinitionId": 3945, "Weight": 100 },
+      { "ItemDefinitionId": 3946, "Weight": 100 },
+      { "ItemDefinitionId": 3947, "Weight": 100 },
+      { "ItemDefinitionId": 3948, "Weight": 100 }
     ]
   },
   {
@@ -113,8 +113,8 @@
     "MaxActiveNodes": 0,
     "RespawnSeconds": 5,
     "DropTable": [
-      { "ItemDefinitionId": 3941, "Weight": 100 },
-      { "ItemDefinitionId": 3942, "Weight": 100 }
+      { "ItemDefinitionId": 3949, "Weight": 100 },
+      { "ItemDefinitionId": 3950, "Weight": 100 }
     ]
   },
   {
@@ -183,6 +183,514 @@
       { "ItemDefinitionId": 11072, "Weight": 100 },
       { "ItemDefinitionId": 3152, "Weight": 100 },
       { "ItemDefinitionId": 3153, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "lakeshore-sparkling-water",
+    "ZoneDefinitionId": 1,
+    "NodeType": "sparkling-water",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3935, "Weight": 100 },
+      { "ItemDefinitionId": 3936, "Weight": 100 },
+      { "ItemDefinitionId": 3937, "Weight": 100 },
+      { "ItemDefinitionId": 3938, "Weight": 100 },
+      { "ItemDefinitionId": 3939, "Weight": 100 },
+      { "ItemDefinitionId": 3940, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "lakeshore-sparkling-water-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "rare-sparkling-water",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3941, "Weight": 100 },
+      { "ItemDefinitionId": 3942, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "lakeshore-flowers",
+    "ZoneDefinitionId": 1,
+    "NodeType": "flowers",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 67, "Weight": 100 },
+      { "ItemDefinitionId": 68, "Weight": 100 },
+      { "ItemDefinitionId": 72, "Weight": 100 },
+      { "ItemDefinitionId": 73, "Weight": 100 },
+      { "ItemDefinitionId": 69, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "lakeshore-flowers-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "rare-flowers",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 70, "Weight": 100 },
+      { "ItemDefinitionId": 71, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "shrouded-glade-elite-exploration",
+    "ZoneDefinitionId": 1,
+    "NodeType": "shrouded-glade-elite-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 58, "Weight": 100 },
+      { "ItemDefinitionId": 59, "Weight": 100 },
+      { "ItemDefinitionId": 60, "Weight": 100 },
+      { "ItemDefinitionId": 61, "Weight": 100 },
+      { "ItemDefinitionId": 62, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "shrouded-glade-rare-exploration",
+    "ZoneDefinitionId": 1,
+    "NodeType": "shrouded-glade-rare-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 63, "Weight": 100 },
+      { "ItemDefinitionId": 64, "Weight": 100 },
+      { "ItemDefinitionId": 65, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "snowhill-flowers",
+    "ZoneDefinitionId": 1,
+    "NodeType": "flowers",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 9124, "Weight": 100 },
+      { "ItemDefinitionId": 9125, "Weight": 100 },
+      { "ItemDefinitionId": 9126, "Weight": 100 },
+      { "ItemDefinitionId": 9127, "Weight": 100 },
+      { "ItemDefinitionId": 9128, "Weight": 100 },
+      { "ItemDefinitionId": 9129, "Weight": 100 },
+      { "ItemDefinitionId": 9130, "Weight": 100 },
+      { "ItemDefinitionId": 9131, "Weight": 100 },
+      { "ItemDefinitionId": 9132, "Weight": 100 },
+      { "ItemDefinitionId": 9133, "Weight": 100 },
+      { "ItemDefinitionId": 9134, "Weight": 100 },
+      { "ItemDefinitionId": 9135, "Weight": 100 },
+      { "ItemDefinitionId": 9136, "Weight": 100 },
+      { "ItemDefinitionId": 9137, "Weight": 100 },
+      { "ItemDefinitionId": 9138, "Weight": 100 },
+      { "ItemDefinitionId": 9139, "Weight": 100 },
+      { "ItemDefinitionId": 9140, "Weight": 100 },
+      { "ItemDefinitionId": 9141, "Weight": 100 },
+      { "ItemDefinitionId": 9142, "Weight": 100 },
+      { "ItemDefinitionId": 9143, "Weight": 100 },
+      { "ItemDefinitionId": 9144, "Weight": 100 },
+      { "ItemDefinitionId": 9145, "Weight": 100 },
+      { "ItemDefinitionId": 9146, "Weight": 100 },
+      { "ItemDefinitionId": 9147, "Weight": 100 },
+      { "ItemDefinitionId": 9148, "Weight": 100 },
+      { "ItemDefinitionId": 9149, "Weight": 100 },
+      { "ItemDefinitionId": 9150, "Weight": 100 },
+      { "ItemDefinitionId": 9151, "Weight": 100 },
+      { "ItemDefinitionId": 9152, "Weight": 100 },
+      { "ItemDefinitionId": 9153, "Weight": 100 },
+      { "ItemDefinitionId": 9154, "Weight": 100 },
+      { "ItemDefinitionId": 9155, "Weight": 100 },
+      { "ItemDefinitionId": 9156, "Weight": 100 },
+      { "ItemDefinitionId": 9157, "Weight": 100 },
+      { "ItemDefinitionId": 9158, "Weight": 100 },
+      { "ItemDefinitionId": 9159, "Weight": 100 },
+      { "ItemDefinitionId": 9160, "Weight": 100 },
+      { "ItemDefinitionId": 9161, "Weight": 100 },
+      { "ItemDefinitionId": 9162, "Weight": 100 },
+      { "ItemDefinitionId": 9163, "Weight": 100 },
+      { "ItemDefinitionId": 9164, "Weight": 100 },
+      { "ItemDefinitionId": 9165, "Weight": 100 },
+      { "ItemDefinitionId": 9166, "Weight": 100 },
+      { "ItemDefinitionId": 9167, "Weight": 100 },
+      { "ItemDefinitionId": 9168, "Weight": 100 },
+      { "ItemDefinitionId": 9169, "Weight": 100 },
+      { "ItemDefinitionId": 9170, "Weight": 100 },
+      { "ItemDefinitionId": 9171, "Weight": 100 },
+      { "ItemDefinitionId": 9172, "Weight": 100 },
+      { "ItemDefinitionId": 9173, "Weight": 100 },
+      { "ItemDefinitionId": 9174, "Weight": 100 },
+      { "ItemDefinitionId": 9175, "Weight": 100 },
+      { "ItemDefinitionId": 9176, "Weight": 100 },
+      { "ItemDefinitionId": 9177, "Weight": 100 },
+      { "ItemDefinitionId": 9178, "Weight": 100 },
+      { "ItemDefinitionId": 9179, "Weight": 100 },
+      { "ItemDefinitionId": 9180, "Weight": 100 },
+      { "ItemDefinitionId": 9181, "Weight": 100 },
+      { "ItemDefinitionId": 9182, "Weight": 100 },
+      { "ItemDefinitionId": 9183, "Weight": 100 },
+      { "ItemDefinitionId": 9184, "Weight": 100 },
+      { "ItemDefinitionId": 9185, "Weight": 100 },
+      { "ItemDefinitionId": 9186, "Weight": 100 },
+      { "ItemDefinitionId": 9187, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "snowhill-flowers-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "rare-flowers",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 9196, "Weight": 100 },
+      { "ItemDefinitionId": 9197, "Weight": 100 },
+      { "ItemDefinitionId": 9198, "Weight": 100 },
+      { "ItemDefinitionId": 9199, "Weight": 100 },
+      { "ItemDefinitionId": 9200, "Weight": 100 },
+      { "ItemDefinitionId": 9201, "Weight": 100 },
+      { "ItemDefinitionId": 9202, "Weight": 100 },
+      { "ItemDefinitionId": 9203, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "snowhill-leaves",
+    "ZoneDefinitionId": 1,
+    "NodeType": "leaves",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3234, "Weight": 100 },
+      { "ItemDefinitionId": 3235, "Weight": 100 },
+      { "ItemDefinitionId": 3236, "Weight": 100 },
+      { "ItemDefinitionId": 3237, "Weight": 100 },
+      { "ItemDefinitionId": 3238, "Weight": 100 },
+      { "ItemDefinitionId": 3239, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "snowhill-leaves-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "rare-leaves",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3240, "Weight": 100 },
+      { "ItemDefinitionId": 3241, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "snowhill-sparkling-water",
+    "ZoneDefinitionId": 1,
+    "NodeType": "sparkling-water",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3927, "Weight": 100 },
+      { "ItemDefinitionId": 3928, "Weight": 100 },
+      { "ItemDefinitionId": 3929, "Weight": 100 },
+      { "ItemDefinitionId": 3930, "Weight": 100 },
+      { "ItemDefinitionId": 3931, "Weight": 100 },
+      { "ItemDefinitionId": 3932, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "snowhill-sparkling-water-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "rare-sparkling-water",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3933, "Weight": 100 },
+      { "ItemDefinitionId": 3934, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "snowhill-elite-exploration",
+    "ZoneDefinitionId": 1,
+    "NodeType": "snowhill-elite-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 58, "Weight": 100 },
+      { "ItemDefinitionId": 59, "Weight": 100 },
+      { "ItemDefinitionId": 60, "Weight": 100 },
+      { "ItemDefinitionId": 61, "Weight": 100 },
+      { "ItemDefinitionId": 62, "Weight": 100 },
+      { "ItemDefinitionId": 63, "Weight": 100 },
+      { "ItemDefinitionId": 64, "Weight": 100 },
+      { "ItemDefinitionId": 65, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "snowhill-rare-exploration",
+    "ZoneDefinitionId": 1,
+    "NodeType": "snowhill-rare-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 63, "Weight": 100 },
+      { "ItemDefinitionId": 64, "Weight": 100 },
+      { "ItemDefinitionId": 65, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "sanctuary-central-sparkling-water",
+    "ZoneDefinitionId": 1,
+    "NodeType": "sparkling-water",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3943, "Weight": 100 },
+      { "ItemDefinitionId": 3944, "Weight": 100 },
+      { "ItemDefinitionId": 3945, "Weight": 100 },
+      { "ItemDefinitionId": 3946, "Weight": 100 },
+      { "ItemDefinitionId": 3947, "Weight": 100 },
+      { "ItemDefinitionId": 3948, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "sanctuary-central-sparkling-water-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "rare-sparkling-water",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3949, "Weight": 100 },
+      { "ItemDefinitionId": 3950, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "sanctuary-central-flowers",
+    "ZoneDefinitionId": 1,
+    "NodeType": "flowers",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3090, "Weight": 100 },
+      { "ItemDefinitionId": 3091, "Weight": 100 },
+      { "ItemDefinitionId": 3092, "Weight": 100 },
+      { "ItemDefinitionId": 3093, "Weight": 100 },
+      { "ItemDefinitionId": 3094, "Weight": 100 },
+      { "ItemDefinitionId": 3095, "Weight": 100 },
+      { "ItemDefinitionId": 3098, "Weight": 100 },
+      { "ItemDefinitionId": 3099, "Weight": 100 },
+      { "ItemDefinitionId": 3100, "Weight": 100 },
+      { "ItemDefinitionId": 3101, "Weight": 100 },
+      { "ItemDefinitionId": 3102, "Weight": 100 },
+      { "ItemDefinitionId": 3103, "Weight": 100 },
+      { "ItemDefinitionId": 3114, "Weight": 100 },
+      { "ItemDefinitionId": 3115, "Weight": 100 },
+      { "ItemDefinitionId": 3116, "Weight": 100 },
+      { "ItemDefinitionId": 3117, "Weight": 100 },
+      { "ItemDefinitionId": 3118, "Weight": 100 },
+      { "ItemDefinitionId": 3119, "Weight": 100 },
+      { "ItemDefinitionId": 23032, "Weight": 100 },
+      { "ItemDefinitionId": 23033, "Weight": 100 },
+      { "ItemDefinitionId": 23034, "Weight": 100 },
+      { "ItemDefinitionId": 23035, "Weight": 100 },
+      { "ItemDefinitionId": 23036, "Weight": 100 },
+      { "ItemDefinitionId": 23037, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "sanctuary-central-flowers-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "rare-flowers",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3096, "Weight": 100 },
+      { "ItemDefinitionId": 3097, "Weight": 100 },
+      { "ItemDefinitionId": 3104, "Weight": 100 },
+      { "ItemDefinitionId": 3105, "Weight": 100 },
+      { "ItemDefinitionId": 3120, "Weight": 100 },
+      { "ItemDefinitionId": 3121, "Weight": 100 },
+      { "ItemDefinitionId": 23038, "Weight": 100 },
+      { "ItemDefinitionId": 23039, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "sanctuary-central-robgoblin-junk",
+    "ZoneDefinitionId": 1,
+    "NodeType": "robgoblin-junk",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3122, "Weight": 100 },
+      { "ItemDefinitionId": 3123, "Weight": 100 },
+      { "ItemDefinitionId": 3124, "Weight": 100 },
+      { "ItemDefinitionId": 3125, "Weight": 100 },
+      { "ItemDefinitionId": 3126, "Weight": 100 },
+      { "ItemDefinitionId": 3127, "Weight": 100 },
+      { "ItemDefinitionId": 3138, "Weight": 100 },
+      { "ItemDefinitionId": 3139, "Weight": 100 },
+      { "ItemDefinitionId": 3140, "Weight": 100 },
+      { "ItemDefinitionId": 3141, "Weight": 100 },
+      { "ItemDefinitionId": 3142, "Weight": 100 },
+      { "ItemDefinitionId": 3143, "Weight": 100 },
+      { "ItemDefinitionId": 3146, "Weight": 100 },
+      { "ItemDefinitionId": 3147, "Weight": 100 },
+      { "ItemDefinitionId": 3148, "Weight": 100 },
+      { "ItemDefinitionId": 3149, "Weight": 100 },
+      { "ItemDefinitionId": 3150, "Weight": 100 },
+      { "ItemDefinitionId": 3151, "Weight": 100 },
+      { "ItemDefinitionId": 3162, "Weight": 100 },
+      { "ItemDefinitionId": 3163, "Weight": 100 },
+      { "ItemDefinitionId": 3164, "Weight": 100 },
+      { "ItemDefinitionId": 3165, "Weight": 100 },
+      { "ItemDefinitionId": 3166, "Weight": 100 },
+      { "ItemDefinitionId": 3167, "Weight": 100 },
+      { "ItemDefinitionId": 3170, "Weight": 100 },
+      { "ItemDefinitionId": 3171, "Weight": 100 },
+      { "ItemDefinitionId": 3172, "Weight": 100 },
+      { "ItemDefinitionId": 3173, "Weight": 100 },
+      { "ItemDefinitionId": 3174, "Weight": 100 },
+      { "ItemDefinitionId": 3175, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "sanctuary-central-robgoblin-junk-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "rare-robgoblin-junk",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3128, "Weight": 100 },
+      { "ItemDefinitionId": 3129, "Weight": 100 },
+      { "ItemDefinitionId": 3144, "Weight": 100 },
+      { "ItemDefinitionId": 3145, "Weight": 100 },
+      { "ItemDefinitionId": 3152, "Weight": 100 },
+      { "ItemDefinitionId": 3153, "Weight": 100 },
+      { "ItemDefinitionId": 3168, "Weight": 100 },
+      { "ItemDefinitionId": 3169, "Weight": 100 },
+      { "ItemDefinitionId": 3176, "Weight": 100 },
+      { "ItemDefinitionId": 3177, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "southern-wilds-leaves",
+    "ZoneDefinitionId": 1,
+    "NodeType": "leaves",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3242, "Weight": 100 },
+      { "ItemDefinitionId": 3243, "Weight": 100 },
+      { "ItemDefinitionId": 3244, "Weight": 100 },
+      { "ItemDefinitionId": 3245, "Weight": 100 },
+      { "ItemDefinitionId": 3246, "Weight": 100 },
+      { "ItemDefinitionId": 3247, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "southern-wilds-leaves-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "rare-leaves",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3248, "Weight": 100 },
+      { "ItemDefinitionId": 3249, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "southern-wilds-flowers",
+    "ZoneDefinitionId": 1,
+    "NodeType": "flowers",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 23475, "Weight": 100 },
+      { "ItemDefinitionId": 23476, "Weight": 100 },
+      { "ItemDefinitionId": 23477, "Weight": 100 },
+      { "ItemDefinitionId": 23478, "Weight": 100 },
+      { "ItemDefinitionId": 23479, "Weight": 100 },
+      { "ItemDefinitionId": 23480, "Weight": 100 },
+      { "ItemDefinitionId": 23483, "Weight": 100 },
+      { "ItemDefinitionId": 23484, "Weight": 100 },
+      { "ItemDefinitionId": 23485, "Weight": 100 },
+      { "ItemDefinitionId": 23486, "Weight": 100 },
+      { "ItemDefinitionId": 23487, "Weight": 100 },
+      { "ItemDefinitionId": 23488, "Weight": 100 },
+      { "ItemDefinitionId": 23491, "Weight": 100 },
+      { "ItemDefinitionId": 23492, "Weight": 100 },
+      { "ItemDefinitionId": 23493, "Weight": 100 },
+      { "ItemDefinitionId": 23494, "Weight": 100 },
+      { "ItemDefinitionId": 23495, "Weight": 100 },
+      { "ItemDefinitionId": 23496, "Weight": 100 },
+      { "ItemDefinitionId": 23499, "Weight": 100 },
+      { "ItemDefinitionId": 23500, "Weight": 100 },
+      { "ItemDefinitionId": 23501, "Weight": 100 },
+      { "ItemDefinitionId": 23502, "Weight": 100 },
+      { "ItemDefinitionId": 23503, "Weight": 100 },
+      { "ItemDefinitionId": 23504, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "southern-wilds-flowers-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "rare-flowers",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 23481, "Weight": 100 },
+      { "ItemDefinitionId": 23482, "Weight": 100 },
+      { "ItemDefinitionId": 23489, "Weight": 100 },
+      { "ItemDefinitionId": 23490, "Weight": 100 },
+      { "ItemDefinitionId": 23497, "Weight": 100 },
+      { "ItemDefinitionId": 23498, "Weight": 100 },
+      { "ItemDefinitionId": 23505, "Weight": 100 },
+      { "ItemDefinitionId": 23506, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "southern-wilds-robgoblin-junk",
+    "ZoneDefinitionId": 1,
+    "NodeType": "robgoblin-junk",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3730, "Weight": 100 },
+      { "ItemDefinitionId": 3731, "Weight": 100 },
+      { "ItemDefinitionId": 3732, "Weight": 100 },
+      { "ItemDefinitionId": 3733, "Weight": 100 },
+      { "ItemDefinitionId": 3734, "Weight": 100 },
+      { "ItemDefinitionId": 3735, "Weight": 100 },
+      { "ItemDefinitionId": 3738, "Weight": 100 },
+      { "ItemDefinitionId": 3739, "Weight": 100 },
+      { "ItemDefinitionId": 3740, "Weight": 100 },
+      { "ItemDefinitionId": 3741, "Weight": 100 },
+      { "ItemDefinitionId": 3742, "Weight": 100 },
+      { "ItemDefinitionId": 3743, "Weight": 100 },
+      { "ItemDefinitionId": 3767, "Weight": 100 },
+      { "ItemDefinitionId": 3768, "Weight": 100 },
+      { "ItemDefinitionId": 3769, "Weight": 100 },
+      { "ItemDefinitionId": 3770, "Weight": 100 },
+      { "ItemDefinitionId": 3771, "Weight": 100 },
+      { "ItemDefinitionId": 3772, "Weight": 100 },
+      { "ItemDefinitionId": 3775, "Weight": 100 },
+      { "ItemDefinitionId": 3776, "Weight": 100 },
+      { "ItemDefinitionId": 3777, "Weight": 100 },
+      { "ItemDefinitionId": 3778, "Weight": 100 },
+      { "ItemDefinitionId": 3779, "Weight": 100 },
+      { "ItemDefinitionId": 3780, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "southern-wilds-robgoblin-junk-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "rare-robgoblin-junk",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3736, "Weight": 100 },
+      { "ItemDefinitionId": 3737, "Weight": 100 },
+      { "ItemDefinitionId": 3744, "Weight": 100 },
+      { "ItemDefinitionId": 3745, "Weight": 100 },
+      { "ItemDefinitionId": 3773, "Weight": 100 },
+      { "ItemDefinitionId": 3774, "Weight": 100 },
+      { "ItemDefinitionId": 3781, "Weight": 100 },
+      { "ItemDefinitionId": 3782, "Weight": 100 }
     ]
   }
 ]
