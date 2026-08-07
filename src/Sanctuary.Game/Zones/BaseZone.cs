@@ -698,7 +698,7 @@ public abstract class BaseZone : IZone, IDisposable
     }
 
     public RoleplayMiniatureMoveResult TryMoveRoleplayMiniature(int id, ulong actorGuid, Vector3 destination,
-        bool direct, [MaybeNullWhen(false)] out RoleplayMiniatureStatus miniature)
+        bool direct, Quaternion arrivalRotation, [MaybeNullWhen(false)] out RoleplayMiniatureStatus miniature)
     {
         lock (_roleplayMiniatureLock)
         {
@@ -726,7 +726,7 @@ public abstract class BaseZone : IZone, IDisposable
 
             _roleplayMiniatureMovementTimes[actorGuid] = now;
             miniature = ToRoleplayMiniatureStatus(entity);
-            entity.MoveTo(destination, direct, forceRecompute: true);
+            entity.MoveTo(destination, direct, forceRecompute: true, arrivalRotation);
             return RoleplayMiniatureMoveResult.Success;
         }
     }

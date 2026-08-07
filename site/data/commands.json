@@ -44,9 +44,9 @@
   {
     "id": "move",
     "task": "Move a miniature",
-    "syntax": "!mini move [#id|nearest] [here|x y z] [direct]",
+    "syntax": "!mini move [#id|nearest] [here|x y z] [path]",
     "example": "!mini move #3 here",
-    "description": "Walks a miniature to your position or supplied coordinates. Add direct to bypass mapped pathfinding for unusual terrain."
+    "description": "Moves a miniature directly to your position or supplied coordinates and matches your facing on arrival. Add path to use mapped navigation."
   },
   {
     "id": "stop",

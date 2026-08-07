@@ -74,7 +74,7 @@ organized into optional groups:
 !mini list @enemies
 !mini info nearest
 !mini move #1 here
-!mini move #1 120.5 32.0 -84.25 direct
+!mini move #1 120.5 32.0 -84.25 path
 !mini stop #1
 !mini emote #1 wave
 !mini emotes

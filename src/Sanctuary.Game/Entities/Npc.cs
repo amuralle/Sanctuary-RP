@@ -80,6 +80,7 @@ public class Npc : IEntity
     public float Speed { get; set; }
 
     private readonly PathState _path = new();
+    private Quaternion? _arrivalRotation;
 
     private PathBuilder? _pathBuilder;
 
@@ -140,8 +141,11 @@ public class Npc : IEntity
         var result = PathFollower.Advance(_path, currentPosition, Speed, WaypointTolerance, Zone.TickDeltaSeconds);
 
         if (result.Moved)
-        {
             UpdatePosition(new Vector4(result.NewPosition, 1f), result.NewRotation!.Value);
+        else if (result.Arrived && _arrivalRotation is Quaternion arrivalRotation)
+        {
+            _arrivalRotation = null;
+            UpdatePosition(Position, arrivalRotation);
         }
     }
 
@@ -379,8 +383,11 @@ public class Npc : IEntity
         Zone.TryRemoveNpc(Guid);
     }
 
-    public void MoveTo(Vector3 goalPosition, bool direct = false, bool forceRecompute = false)
+    public void MoveTo(Vector3 goalPosition, bool direct = false, bool forceRecompute = false,
+        Quaternion? arrivalRotation = null)
     {
+        _arrivalRotation = arrivalRotation;
+
         if (direct || Zone.Pathfinder is null)
         {
             var waypoints = new Queue<Vector3>();
@@ -402,6 +409,7 @@ public class Npc : IEntity
 
     public void StopMoving()
     {
+        _arrivalRotation = null;
         _path.Set([]);
     }
 }

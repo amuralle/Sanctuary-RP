@@ -54,7 +54,7 @@ public interface IZone : IScriptZone
     RoleplayMiniatureSpeakResult TrySpeakRoleplayMiniature(int id, ulong actorGuid, string message,
         [MaybeNullWhen(false)] out RoleplayMiniatureStatus miniature);
     RoleplayMiniatureMoveResult TryMoveRoleplayMiniature(int id, ulong actorGuid, Vector3 destination, bool direct,
-        [MaybeNullWhen(false)] out RoleplayMiniatureStatus miniature);
+        Quaternion arrivalRotation, [MaybeNullWhen(false)] out RoleplayMiniatureStatus miniature);
     bool TryStopRoleplayMiniature(int id, [MaybeNullWhen(false)] out RoleplayMiniatureStatus miniature);
     RoleplayMiniatureEmoteResult TryEmoteRoleplayMiniature(int id, ulong actorGuid, int animationId,
         [MaybeNullWhen(false)] out RoleplayMiniatureStatus miniature);

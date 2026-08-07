@@ -380,18 +380,18 @@ public sealed class RoleplayMiniatureChatCommand : IChatCommand
         if (args.Length < 2 || !TryResolveMiniatureId(invoker, args[0], out var id))
         {
             SendSystemMessage(invoker,
-                "Usage: !mini move [#id|nearest] [here|x y z] [direct]");
+                "Usage: !mini move [#id|nearest] [here|x y z] [path]");
             return;
         }
 
-        var direct = args[^1].Equals("direct", StringComparison.OrdinalIgnoreCase);
+        var usePathfinding = args[^1].Equals("path", StringComparison.OrdinalIgnoreCase);
         Vector3 destination;
 
-        if (args[1].Equals("here", StringComparison.OrdinalIgnoreCase) && args.Length == (direct ? 3 : 2))
+        if (args[1].Equals("here", StringComparison.OrdinalIgnoreCase) && args.Length == (usePathfinding ? 3 : 2))
         {
             destination = new Vector3(invoker.Position.X, invoker.Position.Y, invoker.Position.Z);
         }
-        else if (args.Length == (direct ? 5 : 4) &&
+        else if (args.Length == (usePathfinding ? 5 : 4) &&
             float.TryParse(args[1], out var x) &&
             float.TryParse(args[2], out var y) &&
             float.TryParse(args[3], out var z))
@@ -401,20 +401,20 @@ public sealed class RoleplayMiniatureChatCommand : IChatCommand
         else
         {
             SendSystemMessage(invoker,
-                "Usage: !mini move [#id|nearest] [here|x y z] [direct]");
+                "Usage: !mini move [#id|nearest] [here|x y z] [path]");
             return;
         }
 
         var result = invoker.Zone.TryMoveRoleplayMiniature(
-            id, invoker.Guid, destination, direct, out var miniature);
+            id, invoker.Guid, destination, !usePathfinding, invoker.Rotation, out var miniature);
 
         switch (result)
         {
             case RoleplayMiniatureMoveResult.Success:
                 _chatCommandManager.LogAction(this, invoker, "Move", $"#{miniature.Id} {miniature.Name}",
-                    $"destination=({destination.X:0.##},{destination.Y:0.##},{destination.Z:0.##}), direct={direct}");
+                    $"destination=({destination.X:0.##},{destination.Y:0.##},{destination.Z:0.##}), path={usePathfinding}");
                 SendSystemMessage(invoker,
-                    $"Moving #{miniature.Id} {miniature.Name}{(direct ? " directly" : string.Empty)}.");
+                    $"Moving #{miniature.Id} {miniature.Name}{(usePathfinding ? " using mapped pathfinding" : string.Empty)}.");
                 break;
             case RoleplayMiniatureMoveResult.NotFound:
                 SendSystemMessage(invoker, $"No miniature #{id} exists in this zone.");
@@ -614,7 +614,7 @@ public sealed class RoleplayMiniatureChatCommand : IChatCommand
             "!mini models [search|*] [page]\n" +
             "!mini list [all|mine|@group] [page]\n" +
             "!mini info [#id|nearest]\n" +
-            "!mini move [#id|nearest] [here|x y z] [direct]\n" +
+            "!mini move [#id|nearest] [here|x y z] [path]\n" +
             "!mini stop [#id|nearest]\n" +
             "!mini say [#id|nearest] [message]\n" +
             "!mini emote [#id|nearest] [emote]\n" +
