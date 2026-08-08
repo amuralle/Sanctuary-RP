@@ -237,6 +237,58 @@
     ]
   },
   {
+    "Key": "seaside-shells",
+    "ZoneDefinitionId": 1,
+    "NodeType": "shells",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3895, "Weight": 100 },
+      { "ItemDefinitionId": 3896, "Weight": 100 },
+      { "ItemDefinitionId": 3897, "Weight": 100 },
+      { "ItemDefinitionId": 3898, "Weight": 100 },
+      { "ItemDefinitionId": 3899, "Weight": 100 },
+      { "ItemDefinitionId": 3900, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "seaside-shells-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "rare-shells",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3901, "Weight": 100 },
+      { "ItemDefinitionId": 3902, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "seaside-sparkling-water",
+    "ZoneDefinitionId": 1,
+    "NodeType": "sparkling-water",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3919, "Weight": 100 },
+      { "ItemDefinitionId": 3920, "Weight": 100 },
+      { "ItemDefinitionId": 3921, "Weight": 100 },
+      { "ItemDefinitionId": 3922, "Weight": 100 },
+      { "ItemDefinitionId": 3923, "Weight": 100 },
+      { "ItemDefinitionId": 3924, "Weight": 100 }
+    ]
+  },
+  {
+    "Key": "seaside-sparkling-water-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "rare-sparkling-water",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 5,
+    "DropTable": [
+      { "ItemDefinitionId": 3925, "Weight": 100 },
+      { "ItemDefinitionId": 3926, "Weight": 100 }
+    ]
+  },
+  {
     "Key": "shrouded-glade-elite-exploration",
     "ZoneDefinitionId": 1,
     "NodeType": "shrouded-glade-elite-coin",
