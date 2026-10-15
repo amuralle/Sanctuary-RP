@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 
@@ -10,9 +11,17 @@ using Sanctuary.Game.Pathfinding;
 
 namespace Sanctuary.Game.Zones;
 
-public interface IZone : IScriptZone
+public interface IZone : IScriptableZone, IDisposable
 {
     int DefinitionId { get; }
+
+    ulong? OwnerId { get; }
+
+    Vector4 SpawnPosition { get; }
+    Quaternion SpawnRotation { get; }
+
+    string? Sky { get; }
+
     #region Events
 
     void OnStart();
@@ -26,6 +35,7 @@ public interface IZone : IScriptZone
     IEnumerable<Npc> Npcs { get; }
     IEnumerable<Player> Players { get; }
 
+    bool IsEmpty { get; }
     float TickDeltaSeconds { get; }
 
     bool TryGetNpc(ulong guid, [MaybeNullWhen(false)] out Npc npc);
@@ -33,8 +43,10 @@ public interface IZone : IScriptZone
     bool TryGetEntity(ulong guid, [MaybeNullWhen(false)] out IEntity entity);
 
     bool TryAddMount(Mount mount);
+    bool TryAddNpc<TNpc>(Func<IZone, ulong, TNpc> createNpc, [MaybeNullWhen(false)] out TNpc npc) where TNpc : Npc;
     bool TryAddPlayer(Player player);
 
+    bool TryCreateNpc([MaybeNullWhen(false)] out Npc npc);
     bool TryCreateNpc(ulong? guid, [MaybeNullWhen(false)] out Npc npc);
     bool TryCreateNpc(ulong? guid, NpcDefinition definition, [MaybeNullWhen(false)] out Npc npc);
     IReadOnlyList<CollectionNodePoolStatus> GetCollectionNodePoolStatuses();
@@ -83,4 +95,24 @@ public interface IZone : IScriptZone
     #endregion
 
     Pathfinder<MapNode>? Pathfinder { get; }
+
+    bool HasGroundData { get; }
+
+    bool TryGetGroundHeight(float x, float z, float fromY, float maxDrop, out float height);
+
+    bool IsWalkable(Vector3 start, Vector3 goal, float maxStepUp, float maxStepDown, out float goalHeight);
+
+    bool TryGetWalkableGoal(Vector3 start, Vector3 goal, float maxStepUp, float maxStepDown, out Vector3 walkableGoal);
+
+    Vector3 GetGroundPosition(Vector3 position, float maxStepUp, float maxDrop);
+
+    bool HasNavMesh { get; }
+
+    bool TryFindNavMeshPath(Vector3 start, Vector3 goal, Queue<Vector3> waypoints);
+
+    bool TryFindClientNavMeshPath(Vector3 start, Vector3 goal, Queue<Vector3> waypoints);
+
+    bool TryFindRoute(Vector3 start, Vector3 goal, Queue<Vector3> waypoints);
+
+    bool TryFindReachableRoute(Vector3 start, Vector3 goal, Queue<Vector3> waypoints, bool followRoads);
 }

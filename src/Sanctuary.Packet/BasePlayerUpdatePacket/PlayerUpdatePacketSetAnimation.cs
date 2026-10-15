@@ -2,13 +2,15 @@ using Sanctuary.Core.IO;
 
 namespace Sanctuary.Packet;
 
-public sealed class PlayerUpdatePacketSetAnimation : BasePlayerUpdatePacket, ISerializablePacket
+public class PlayerUpdatePacketSetAnimation : BasePlayerUpdatePacket, ISerializablePacket
 {
     public new const short OpCode = 8;
 
     public ulong Guid;
     public int AnimationId;
-    public int Variation = -1;
+    public int Unknown;
+
+    // Bit 0 set = set the entity's base/idle animation, otherwise play it now.
     public byte Flags;
 
     public PlayerUpdatePacketSetAnimation() : base(OpCode)
@@ -22,7 +24,7 @@ public sealed class PlayerUpdatePacketSetAnimation : BasePlayerUpdatePacket, ISe
         Write(writer);
         writer.Write(Guid);
         writer.Write(AnimationId);
-        writer.Write(Variation);
+        writer.Write(Unknown);
         writer.Write(Flags);
 
         return writer.Buffer;

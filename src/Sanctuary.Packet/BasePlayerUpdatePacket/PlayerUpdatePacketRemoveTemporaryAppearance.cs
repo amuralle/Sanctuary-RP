@@ -2,12 +2,13 @@ using Sanctuary.Core.IO;
 
 namespace Sanctuary.Packet;
 
-public sealed class PlayerUpdatePacketRemoveTemporaryAppearance : BasePlayerUpdatePacket, ISerializablePacket
+public class PlayerUpdatePacketRemoveTemporaryAppearance : BasePlayerUpdatePacket, ISerializablePacket
 {
     public new const short OpCode = 15;
 
     public ulong Guid;
-    public int Unknown;
+
+    private int Unused = default;
 
     public PlayerUpdatePacketRemoveTemporaryAppearance() : base(OpCode)
     {
@@ -18,8 +19,10 @@ public sealed class PlayerUpdatePacketRemoveTemporaryAppearance : BasePlayerUpda
         using var writer = new PacketWriter();
 
         Write(writer);
+
         writer.Write(Guid);
-        writer.Write(Unknown);
+
+        writer.Write(Unused);
 
         return writer.Buffer;
     }

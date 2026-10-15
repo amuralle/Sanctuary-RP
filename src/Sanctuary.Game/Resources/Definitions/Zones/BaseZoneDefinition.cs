@@ -5,7 +5,9 @@ using Sanctuary.Core.IO;
 
 namespace Sanctuary.Game.Resources.Definitions.Zones;
 
-[JsonDerivedType(typeof(StartingZoneDefinition), "Starting")]
+[JsonDerivedType(typeof(WorldZoneDefinition), "World")]
+[JsonDerivedType(typeof(CombatZoneDefinition), "Dungeon")]
+[JsonDerivedType(typeof(HousingZoneDefinition), "Housing")]
 public abstract class BaseZoneDefinition
 {
     public int Id { get; set; }
@@ -32,4 +34,6 @@ public abstract class BaseZoneDefinition
 
     [JsonConverter(typeof(QuaternionJsonConverter))]
     public Quaternion SpawnRotation { get; set; }
+
+    public string[]? Scripts { get; set; }
 }

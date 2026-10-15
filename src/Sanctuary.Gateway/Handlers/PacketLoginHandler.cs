@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +10,7 @@ using Sanctuary.Core.Configuration;
 using Sanctuary.Core.Helpers;
 using Sanctuary.Database;
 using Sanctuary.Game;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
 
@@ -41,19 +42,19 @@ public static class PacketLoginHandler
 
     public static bool HandlePacket(GatewayConnection connection, Span<byte> data)
     {
-        if (!PacketLogin.TryDeserialize(data, out var packet))
+        if (!PacketLogin.TryDeserialize(data, out var packetLogin))
         {
             _logger.LogError("Failed to deserialize {packet}.", nameof(PacketLogin));
             return false;
         }
 
-        _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(PacketLogin), packet);
+        _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(PacketLogin), packetLogin);
 
         var packetLoginReply = new PacketLoginReply();
 
-        if (packet.Version != _options.ClientVersion)
+        if (packetLogin.Version != _options.ClientVersion)
         {
-            _logger.LogError("{connection} connected with a different client version. ( Guid: {guid}, ClientVersion: \"{version}\" )", connection, packet.Guid, packet.Version);
+            _logger.LogError("{connection} connected with a different client version. ( Guid: {guid}, ClientVersion: \"{version}\" )", connection, packetLogin.Guid, packetLogin.Version);
 
             connection.Send(packetLoginReply);
 
@@ -62,9 +63,9 @@ public static class PacketLoginHandler
             return true;
         }
 
-        if (!Guid.TryParse(packet.Ticket, out var ticket))
+        if (!Guid.TryParse(packetLogin.Ticket, out var ticket))
         {
-            _logger.LogError("{connection} connected with an invalid ticket. ( Guid: {guid}, Ticket: \"{ticket}\" )", connection, packet.Guid, packet.Ticket);
+            _logger.LogError("{connection} connected with an invalid ticket. ( Guid: {guid}, Ticket: \"{ticket}\" )", connection, packetLogin.Guid, packetLogin.Ticket);
 
             connection.Send(packetLoginReply);
 
@@ -74,7 +75,7 @@ public static class PacketLoginHandler
         }
 
         // Use ticket as key.
-        connection.InitializeCipher(packet.Ticket);
+        connection.InitializeCipher(packetLogin.Ticket);
 
         using var dbContext = _dbContextFactory.CreateDbContext();
 
@@ -82,8 +83,11 @@ public static class PacketLoginHandler
             .AsNoTrackingWithIdentityResolution()
             .Include(x => x.User)
             .Include(x => x.Items)
+            .Include(x => x.CollectionEntries)
             .Include(x => x.Titles)
             .Include(x => x.Mounts)
+            .Include(x => x.Pets)
+                .ThenInclude(x => x.Items)
             .Include(x => x.Friends)
                 .ThenInclude(x => x.FriendCharacter)
             .Include(x => x.Ignores)
@@ -95,11 +99,15 @@ public static class PacketLoginHandler
                     .ThenInclude(x => x.Members)
                         .ThenInclude(x => x.Character)
             .AsSplitQuery()
-            .SingleOrDefault(x => x.Id == GuidHelper.GetPlayerId(packet.Guid) && x.Ticket == ticket);
+            .SingleOrDefault(x => x.Id == GuidHelper.GetPlayerId(packetLogin.Guid)
+#if !DEBUG
+                && x.Ticket == ticket
+#endif
+            );
 
         if (character is null)
         {
-            _logger.LogWarning("{connection} connected with an invalid guid or ticket. ( Guid: {guid}, Ticket: \"{ticket}\" )", connection, packet.Guid, packet.Ticket);
+            _logger.LogWarning("{connection} connected with an invalid guid or ticket. ( Guid: {guid}, Ticket: \"{ticket}\" )", connection, packetLogin.Guid, packetLogin.Ticket);
 
             connection.Send(packetLoginReply);
 
@@ -121,7 +129,7 @@ public static class PacketLoginHandler
             }
             else
             {
-                _logger.LogWarning("{connection} connected with a banned account. ( Guid: {guid}, Ticket: \"{ticket}\" )", connection, packet.Guid, packet.Ticket);
+                _logger.LogWarning("{connection} connected with a banned account. ( Guid: {guid}, Ticket: \"{ticket}\" )", connection, packetLogin.Guid, packetLogin.Ticket);
 
                 connection.Send(packetLoginReply);
 
@@ -130,7 +138,7 @@ public static class PacketLoginHandler
                 return true;
             }
         }
-      
+
         var orphanedIgnores = character.Ignores
             .Where(x => x.IgnoreCharacter is null)
             .ToList();
@@ -151,6 +159,18 @@ public static class PacketLoginHandler
             }
         }
 
+        bool isReferee = character.User.IsMod || character.User.IsAdmin;
+        if (isReferee)
+        {
+            ProfileHelper.AddSpecialProfile(character, dbContext, _resourceManager, _logger, SpecialProfileIds.Referee);
+            ProfileHelper.AddSpecialProfile(character, dbContext, _resourceManager, _logger, SpecialProfileIds.Enforcer);
+        }
+        else
+        {
+            // if user is no longer a mod, remove referee profile
+            ProfileHelper.RemoveSpecialProfile(character, dbContext, _logger, SpecialProfileIds.Referee);
+            ProfileHelper.RemoveSpecialProfile(character, dbContext, _logger, SpecialProfileIds.Enforcer);
+        }
 #if !DEBUG
         var result = dbContext.Characters
             .Where(x => x.Id == character.Id)
@@ -175,6 +195,10 @@ public static class PacketLoginHandler
             return true;
         }
 
+        dbContext.Characters
+            .Where(x => x.Id == character.Id)
+            .ExecuteUpdate(x => x.SetProperty(x => x.LastLogin, connection.Player.LoginStartedAt));
+
         _loginClient.SendCharacterLogin(character.Id);
 
         packetLoginReply.Success = true;
@@ -183,7 +207,13 @@ public static class PacketLoginHandler
 
         // TODO
         // AchievementObjectiveActivatedPacket - Part 1?
-        // EncounterOverworldCombatPacket
+
+        var encounterOverworldCombatPacket = new EncounterOverworldCombatPacket
+        {
+            InWorldCombat = true
+        };
+
+        connection.SendTunneled(encounterOverworldCombatPacket);
 
         connection.SendInitializationParameters();
         connection.SendZoneDetails();

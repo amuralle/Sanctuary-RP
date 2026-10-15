@@ -38,6 +38,12 @@ public static class PacketClientFinishedLoadingHandler
 
         connection.Player.Zone.OnClientFinishedLoading(connection.Player);
 
+        connection.Player.PlayerPet.RestorePet();
+
+        connection.Player.SendTunneled(connection.Player.GetWeaponFlairOverridePacket());
+
+        connection.Player.SendToolbar();
+
         return true;
     }
 }

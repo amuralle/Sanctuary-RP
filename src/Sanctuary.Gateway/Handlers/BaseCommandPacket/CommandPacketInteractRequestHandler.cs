@@ -7,13 +7,16 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
+using Sanctuary.Core.Extensions;
 using Sanctuary.Core.Helpers;
 using Sanctuary.Core.IO;
 using Sanctuary.Database;
 using Sanctuary.Database.Entities;
 using Sanctuary.Game;
 using Sanctuary.Game.Entities;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Resources.Definitions;
+using Sanctuary.Game.Resources.Definitions.Rewards;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
 using Sanctuary.Packet.Common.Attributes;
@@ -23,9 +26,12 @@ namespace Sanctuary.Gateway.Handlers;
 [PacketHandler]
 public static class CommandPacketInteractRequestHandler
 {
+    private const int CollectionStartEntryDelayMs = 500;
+
     private static ILogger _logger = null!;
     private static IDbContextFactory<DatabaseContext> _dbContextFactory = null!;
     private static IResourceManager _resourceManager = null!;
+    private static IRewardManager _rewardManager = null!;
 
     public static void ConfigureServices(IServiceProvider serviceProvider)
     {
@@ -33,6 +39,7 @@ public static class CommandPacketInteractRequestHandler
         _logger = loggerFactory.CreateLogger(nameof(CommandPacketInteractRequestHandler));
         _dbContextFactory = serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>();
         _resourceManager = serviceProvider.GetRequiredService<IResourceManager>();
+        _rewardManager = serviceProvider.GetRequiredService<IRewardManager>();
     }
 
     public static bool HandlePacket(GatewayConnection connection, ReadOnlySpan<byte> data)
@@ -51,8 +58,141 @@ public static class CommandPacketInteractRequestHandler
         if (entity is CollectionNode collectionNode)
             return HandleCollectionNode(connection, collectionNode);
 
+        if (entity is PetTreasureChest petTreasureChest)
+        {
+            if (PetHelper.TryOpenTreasureChest(connection.Player, petTreasureChest, _rewardManager, _resourceManager, out var itemDrop) && itemDrop is not null)
+                GrantCollectionReward(connection, itemDrop, petTreasureChest.Guid);
+
+            return true;
+        }
+        if (entity is CollectionCoin collectionCoin)
+            return HandleCollectionCoin(connection, collectionCoin);
+
         entity.OnInteract(connection.Player);
         return true;
+    }
+
+    private static void GrantCollectionReward(GatewayConnection connection, RewardDropDefinition drop, ulong sourceGuid)
+    {
+        CollectionProgress? collectionProgress = drop is ItemRewardDropDefinition itemDrop
+            ? GetCollectionProgress(connection.Player, itemDrop.ItemDefinitionId)
+            : null;
+
+        if (_rewardManager.TryGrantReward(connection.Player, drop, sourceGuid) && collectionProgress is not null)
+            SendCollectionProgress(connection, collectionProgress.Value);
+    }
+
+    private readonly record struct CollectionProgress(int ItemDefinitionId, HashSet<int> OwnedItemDefinitionIds, HashSet<int> CollectedEntryIds,
+        CollectionEntryMatch? Match, bool WasStarted, bool EntryWasCollected);
+
+    private static CollectionProgress GetCollectionProgress(Player player, int itemDefinitionId)
+    {
+        var ownedItemDefinitionIds = player.Items
+            .Select(item => item.Definition)
+            .ToHashSet();
+        var collectedEntryIds = player.CollectedCollectionEntryIds.ToHashSet();
+        var collectionMatch = FindCollectionEntry(itemDefinitionId);
+
+        return new CollectionProgress(itemDefinitionId, ownedItemDefinitionIds, collectedEntryIds, collectionMatch,
+            collectionMatch is not null && collectionMatch.Value.Definition.IsStarted(ownedItemDefinitionIds, collectedEntryIds),
+            ownedItemDefinitionIds.Contains(itemDefinitionId));
+    }
+
+    private static bool SendCollectionProgress(GatewayConnection connection, CollectionProgress collectionProgress)
+    {
+        if (collectionProgress.Match is not { } collectionMatch || collectionProgress.EntryWasCollected)
+            return false;
+
+        collectionProgress.OwnedItemDefinitionIds.Add(collectionProgress.ItemDefinitionId);
+
+        if (collectionProgress.WasStarted
+            && collectionMatch.Definition.IsComplete(collectionProgress.OwnedItemDefinitionIds, collectionProgress.CollectedEntryIds))
+        {
+            connection.SendTunneled(new ClientUpdatePacketCollectionRemoveEntry
+            {
+                CollectionId = collectionMatch.Definition.Id,
+                EntryId = collectionMatch.Entry.Id
+            });
+        }
+
+        SendCollectionEntryUpdate(connection, collectionMatch.Definition, collectionMatch.Entry, collectionMatch.Index,
+            collectionProgress.WasStarted);
+        return true;
+    }
+
+    private static bool HandleCollectionCoin(GatewayConnection connection, CollectionCoin coin)
+    {
+        var playerPosition = connection.Player.Position;
+        var coinPosition = coin.Position;
+        var distanceSquared = Vector3.DistanceSquared(
+            new Vector3(playerPosition.X, playerPosition.Y, playerPosition.Z),
+            new Vector3(coinPosition.X, coinPosition.Y, coinPosition.Z));
+
+        if (distanceSquared > coin.InteractRange * coin.InteractRange ||
+            connection.Player.CollectedCollectionEntryIds.Contains(coin.Definition.EntryId) ||
+            !coin.TryReserve(connection.Player.Guid))
+        {
+            return true;
+        }
+
+        try
+        {
+            if (!_resourceManager.Collections.TryGetValue(coin.Definition.CollectionId, out var collection))
+                return false;
+
+            var entryIndex = collection.Entries.FindIndex(entry => entry.Id == coin.Definition.EntryId);
+
+            if (entryIndex < 0)
+                return false;
+
+            var ownedItemDefinitionIds = connection.Player.Items
+                .Select(item => item.Definition)
+                .ToHashSet();
+            var collectedEntryIds = connection.Player.CollectedCollectionEntryIds.ToHashSet();
+            var collectionWasStarted = collection.IsStarted(ownedItemDefinitionIds, collectedEntryIds);
+            var characterId = GuidHelper.GetPlayerId(connection.Player.Guid);
+
+            using var dbContext = _dbContextFactory.CreateDbContext();
+            dbContext.CollectionEntries.Add(new DbCollectionEntry
+            {
+                CharacterId = characterId,
+                CollectionId = coin.Definition.CollectionId,
+                EntryId = coin.Definition.EntryId
+            });
+
+            if (dbContext.SaveChanges() <= 0)
+                return false;
+
+            connection.Player.CollectedCollectionEntryIds.TryAdd(coin.Definition.EntryId);
+            collectedEntryIds.Add(coin.Definition.EntryId);
+            var collectionWillBeComplete = collection.IsComplete(ownedItemDefinitionIds, collectedEntryIds);
+
+            connection.Player.OnRemoveVisibleNpcGracefully(coin, animate: true);
+            coin.OnRemoveVisiblePlayers(connection.Player);
+
+            if (collectionWasStarted && collectionWillBeComplete)
+            {
+                connection.SendTunneled(new ClientUpdatePacketCollectionRemoveEntry
+                {
+                    CollectionId = collection.Id,
+                    EntryId = coin.Definition.EntryId
+                });
+            }
+
+            SendCollectionEntryUpdate(
+                connection, collection, collection.Entries[entryIndex], entryIndex, collectionWasStarted);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to collect coin NPC {npcId} for player {playerGuid}.",
+                coin.Definition.NpcDefinitionId, connection.Player.Guid);
+            return false;
+        }
+        finally
+        {
+            coin.Release(connection.Player.Guid);
+        }
     }
 
     private static bool HandleCollectionNode(GatewayConnection connection, CollectionNode node)
@@ -60,11 +200,20 @@ public static class CommandPacketInteractRequestHandler
         var playerPosition = connection.Player.Position;
         var nodePosition = node.Position;
         var distanceSquared = Vector3.DistanceSquared(
-            new Vector3(playerPosition.X, playerPosition.Y, playerPosition.Z),
-            new Vector3(nodePosition.X, nodePosition.Y, nodePosition.Z));
+            playerPosition.ToVector3(),
+            nodePosition.ToVector3());
 
         if (distanceSquared > node.InteractRange * node.InteractRange)
+        {
+            var commandPacketMoveAndInteract = new CommandPacketMoveAndInteract
+            {
+                Position = nodePosition,
+                Guid = node.Guid
+            };
+
+            connection.SendTunneled(commandPacketMoveAndInteract);
             return true;
+        }
 
         if (!node.TryReserve())
             return true;
@@ -74,31 +223,18 @@ public static class CommandPacketInteractRequestHandler
 
         try
         {
-            var roll = Random.Shared.Next(node.PoolDefinition.TotalDropWeight);
-            var drop = node.PoolDefinition.SelectDrop(roll);
+            var drop = node.PoolDefinition.Table.SelectRandom();
             var itemDefinitionId = drop.ItemDefinitionId;
 
             if (!_resourceManager.ClientItemDefinitions.TryGetValue(itemDefinitionId, out var itemDefinition))
             {
-                _logger.LogError("Collection node pool {pool} references unknown item definition {itemDefinitionId}.",
-                    node.PoolDefinition.Key, itemDefinitionId);
+                _logger.LogError("Collection node type {type} references unknown item definition {itemDefinitionId}.",
+                    node.TypeDefinition.Key, itemDefinitionId);
                 node.Release();
                 return true;
             }
 
-            var ownedItemDefinitionIds = connection.Player.Items
-                .Select(item => item.Definition)
-                .ToHashSet();
-            var collectionMatch = _resourceManager.Collections.Values
-                .SelectMany(definition => definition.Entries.Select((entry, index) => new
-                {
-                    Definition = definition,
-                    Entry = entry,
-                    Index = index
-                }))
-                .FirstOrDefault(match => match.Entry.ItemDefinitionId == itemDefinitionId);
-            var collectionWasStarted = collectionMatch?.Definition.IsStarted(ownedItemDefinitionIds) ?? false;
-            var collectionEntryWasCollected = ownedItemDefinitionIds.Contains(itemDefinitionId);
+            var collectionProgress = GetCollectionProgress(connection.Player, itemDefinitionId);
 
             var characterId = GuidHelper.GetPlayerId(connection.Player.Guid);
 
@@ -171,41 +307,11 @@ public static class CommandPacketInteractRequestHandler
                 });
             }
 
-            ownedItemDefinitionIds.Add(itemDefinitionId);
-            var collectionWillBeComplete = collectionMatch?.Definition.IsComplete(ownedItemDefinitionIds) ?? false;
-
             node.CompleteCollection();
             nodeCompleted = true;
 
-            if (collectionMatch is not null && !collectionEntryWasCollected)
-            {
-                if (collectionWasStarted)
-                {
-                    if (collectionWillBeComplete)
-                    {
-                        // Snapshot-restored placeholders do not reliably transition during the final add.
-                        // Removing the final placeholder first lets the client run its native completion path.
-                        connection.SendTunneled(new ClientUpdatePacketCollectionRemoveEntry
-                        {
-                            CollectionId = collectionMatch.Definition.Id,
-                            EntryId = collectionMatch.Entry.Id
-                        });
-                    }
-
-                    SendCollectionEntryUpdate(connection, collectionMatch.Definition,
-                        collectionMatch.Entry, collectionMatch.Index);
-                }
-                else
-                {
-                    SendCollectionStart(connection, collectionMatch.Definition, ownedItemDefinitionIds);
-                    SendCollectionEntryUpdate(connection, collectionMatch.Definition,
-                        collectionMatch.Entry, collectionMatch.Index);
-                }
-            }
-            else
-            {
+            if (!SendCollectionProgress(connection, collectionProgress))
                 SendCollectionRewardToast(connection, clientItem, itemDefinition, node);
-            }
 
             return true;
         }
@@ -222,23 +328,27 @@ public static class CommandPacketInteractRequestHandler
         }
     }
 
-    private static void SendCollectionStart(GatewayConnection connection, CollectionDefinition definition,
-        IReadOnlySet<int> ownedItemDefinitionIds)
+    private static CollectionEntryMatch? FindCollectionEntry(int itemDefinitionId)
     {
-        var collection = definition.CreateClientCollection(connection.Player.Guid, ownedItemDefinitionIds);
+        foreach (var definition in _resourceManager.Collections.Values)
+        {
+            for (var index = 0; index < definition.Entries.Count; index++)
+            {
+                var entry = definition.Entries[index];
 
-        using var writer = new PacketWriter();
-        collection.Serialize(writer);
+                if (entry.ItemDefinitionId == itemDefinitionId)
+                    return new CollectionEntryMatch(definition, entry, index);
+            }
+        }
 
-        connection.SendTunneled(new ClientUpdatePacketCollectionStart { Payload = writer.Buffer });
+        return null;
     }
 
     private static void SendCollectionEntryUpdate(GatewayConnection connection, CollectionDefinition definition,
-        CollectionEntryDefinition entryDefinition, int index)
+        CollectionEntryDefinition entryDefinition, int index, bool collectionWasStarted)
     {
         var entry = definition.CreateClientCollectionEntry(entryDefinition, index, true);
-
-        connection.SendTunneled(new ClientUpdatePacketCollectionAddEntry
+        var packet = new ClientUpdatePacketCollectionAddEntry
         {
             DefinitionId = entry.DefinitionId,
             IconId = entry.IconId,
@@ -248,7 +358,43 @@ public static class CommandPacketInteractRequestHandler
             Index = entry.Index,
             Unknown = entry.Unknown,
             Collected = entry.Collected
-        });
+        };
+
+        if (!collectionWasStarted)
+        {
+            SendCollectionStart(connection, definition, entryDefinition);
+            connection.Player.SendTunneledDelayed(packet, CollectionStartEntryDelayMs);
+        }
+        else
+        {
+            connection.SendTunneled(packet);
+        }
+    }
+
+    private static void SendCollectionStart(GatewayConnection connection, CollectionDefinition definition,
+        CollectionEntryDefinition acquiredEntry)
+    {
+        var ownedItemDefinitionIds = connection.Player.Items
+            .Select(item => item.Definition)
+            .ToHashSet();
+        var collectedEntryIds = connection.Player.CollectedCollectionEntryIds.ToHashSet();
+
+        // Preserve the pre-acquisition state so the following AddEntry is a real progress transition.
+        if (acquiredEntry.ItemDefinitionId > 0)
+            ownedItemDefinitionIds.Remove(acquiredEntry.ItemDefinitionId);
+        else
+            collectedEntryIds.Remove(acquiredEntry.Id);
+
+        var collection = definition.CreateClientCollection(
+            connection.Player.Guid, ownedItemDefinitionIds, collectedEntryIds);
+
+        using var writer = new PacketWriter();
+        collection.Serialize(writer);
+
+        // Definitions are preloaded for the client's fixed collection schema. Replacing the hidden
+        // definition keeps CollectionStart and CollectionAddEntry as distinct native UI events.
+        connection.SendTunneled(new ClientUpdatePacketCollectionRemove { CollectionId = definition.Id });
+        connection.SendTunneled(new ClientUpdatePacketCollectionStart { Payload = writer.Buffer });
     }
 
     private static void SendCollectionRewardToast(GatewayConnection connection, ClientItem clientItem,
@@ -256,20 +402,28 @@ public static class CommandPacketInteractRequestHandler
     {
         var notificationId = Environment.TickCount & int.MaxValue;
 
-        connection.SendTunneled(new RewardBundlePacket
+        var packet = new RewardBundlePacket
         {
-            SourceGuid = node.Guid ^ (uint)notificationId,
-            PlayerGuid = connection.Player.Guid,
+            Unknown8 = itemDefinition.DescriptionId
+        };
+        packet.RewardBundle.SourceGuid = node.Guid ^ (uint)notificationId;
+        packet.RewardBundle.PlayerGuid = connection.Player.Guid;
+        packet.RewardBundle.IconId = itemDefinition.Icon.Id;
+        packet.RewardBundle.NameId = itemDefinition.NameId;
+        packet.RewardBundle.Entries.Add(new RewardBundleEntryItem
+        {
             IconId = itemDefinition.Icon.Id,
             NameId = itemDefinition.NameId,
-            Quantity = 1,
-            EntryIconId = itemDefinition.Icon.Id,
-            EntryNameId = itemDefinition.NameId,
-            EntryQuantity = 1,
-            ItemDefinitionId = clientItem.Definition,
+            DefinitionId = clientItem.Definition,
             Tint = clientItem.Tint,
-            ItemGuid = notificationId,
-            EntryUnknown5 = itemDefinition.DescriptionId
+            ItemGuid = clientItem.Id
         });
+
+        connection.SendTunneled(packet);
     }
+
+    private readonly record struct CollectionEntryMatch(
+        CollectionDefinition Definition,
+        CollectionEntryDefinition Entry,
+        int Index);
 }

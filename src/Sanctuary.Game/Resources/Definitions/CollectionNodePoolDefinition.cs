@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Sanctuary.Core.Collections;
+
 namespace Sanctuary.Game.Resources.Definitions;
 
 public sealed class CollectionNodePoolDefinition
@@ -35,6 +37,9 @@ public sealed class CollectionNodePoolDefinition
 
         throw new InvalidOperationException("The collection node drop table is invalid.");
     }
+    private WeightedDropTable<CollectionNodeDropDefinition>? _table;
+    public WeightedDropTable<CollectionNodeDropDefinition> Table =>
+        _table ??= new WeightedDropTable<CollectionNodeDropDefinition>(DropTable);
 
     /// <summary>
     /// Gets the number of nodes that should be active for the supplied hardpoint count.

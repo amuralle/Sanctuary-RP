@@ -11,8 +11,8 @@ public sealed class NpcVisibilityTests
     public void OnAddVisiblePlayers_ReplacesPreviousSessionWithSameGuid()
     {
         var npc = new Npc(null!);
-        var previousSession = new Player(null!, null!, null!) { Guid = 17 };
-        var currentSession = new Player(null!, null!, null!) { Guid = 17 };
+        var previousSession = new Player(null!, null!, null!, null!) { Guid = 17 };
+        var currentSession = new Player(null!, null!, null!, null!) { Guid = 17 };
 
         npc.OnAddVisiblePlayers(previousSession);
         npc.OnAddVisiblePlayers(currentSession);
@@ -24,8 +24,8 @@ public sealed class NpcVisibilityTests
     public void OnRemoveVisiblePlayers_DoesNotRemoveReplacementSessionWithSameGuid()
     {
         var npc = new Npc(null!);
-        var previousSession = new Player(null!, null!, null!) { Guid = 17 };
-        var currentSession = new Player(null!, null!, null!) { Guid = 17 };
+        var previousSession = new Player(null!, null!, null!, null!) { Guid = 17 };
+        var currentSession = new Player(null!, null!, null!, null!) { Guid = 17 };
 
         npc.OnAddVisiblePlayers(previousSession);
         npc.OnAddVisiblePlayers(currentSession);

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Threading;
 
+using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Game.Zones;
 
@@ -47,12 +48,7 @@ public sealed class CollectionNode : Npc
     internal void DisposeAfterCollection()
     {
         DisposeEffectAnchors();
-        DisposeGracefully(
-            animate: true,
-            delay: 0,
-            effectDelay: 0,
-            compositeEffectId: 0,
-            duration: 1000);
+        EntityHelper.RemovePlayerGracefully(this, animate: true, duration: 1000);
     }
 
     public override void Dispose()

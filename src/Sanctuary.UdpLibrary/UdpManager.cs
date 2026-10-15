@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 
 using Collections.Pooled;
 
@@ -56,6 +57,8 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
     public readonly IServiceProvider _serviceProvider;
 
     private readonly IUdpDriver _driver;
+
+    private readonly List<UdpConnection> _dueConnections = [];
 
     protected UdpClockStamp LastEmptySocketBufferStamp;
 
@@ -386,9 +389,18 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
                         if (top is null)
                             break;
 
-                        top.GiveTime();
+                        if (Params.ParallelConnectionGiveTime)
+                            _dueConnections.Add(top);
+                        else
+                            top.GiveTime();
 
                         processed++;
+                    }
+
+                    if (_dueConnections.Count > 0)
+                    {
+                        Parallel.ForEach(_dueConnections, dueConnection => dueConnection.GiveTime());
+                        _dueConnections.Clear();
                     }
 
                     lock (_statsGuard)
@@ -688,10 +700,10 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
     public void ActualSend(ReadOnlySpan<byte> data, int dataLen, SocketAddress socketAddress)
     {
-        LastSendTime = CachedClock;
+        Interlocked.Exchange(ref LastSendTime, CachedClock);
 
-        ManagerStats.BytesSent += dataLen;
-        ManagerStats.PacketsSent++;
+        Interlocked.Add(ref ManagerStats.BytesSent, dataLen);
+        Interlocked.Increment(ref ManagerStats.PacketsSent);
 
         // TODO: Simulation
 

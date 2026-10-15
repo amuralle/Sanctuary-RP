@@ -39,9 +39,8 @@ public class Pathfinder<TNode> where TNode : IPathNode
 
 
         // NOTE: this was ported from a Python implementation that I have.
-        // Apparently, `heapq` and PriorityQueue have difference tie breaker
-        // behavior. This shouldn't affect the validity of the solution, but if
-        // anyone ever gets their hands on the Python version for validation, it may
+        // Apparently, `heapq` and PriorityQueue have different tie breaker behavior.
+        // This shouldn't affect validity, but may prevent 1:1 validation against Python.
         // not be 1:1.
         // - Alko
         var forwardQueue = new PriorityQueue<int, float>();

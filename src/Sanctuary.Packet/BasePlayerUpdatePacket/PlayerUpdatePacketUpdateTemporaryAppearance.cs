@@ -2,12 +2,13 @@ using Sanctuary.Core.IO;
 
 namespace Sanctuary.Packet;
 
-public sealed class PlayerUpdatePacketUpdateTemporaryAppearance : BasePlayerUpdatePacket, ISerializablePacket
+public class PlayerUpdatePacketUpdateTemporaryAppearance : BasePlayerUpdatePacket, ISerializablePacket
 {
     public new const short OpCode = 14;
 
-    public int TemporaryAppearance;
     public ulong Guid;
+
+    public int TemporaryAppearance;
 
     public PlayerUpdatePacketUpdateTemporaryAppearance() : base(OpCode)
     {

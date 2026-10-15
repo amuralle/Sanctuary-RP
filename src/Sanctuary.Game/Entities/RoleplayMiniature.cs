@@ -1,4 +1,5 @@
 using Sanctuary.Game.Zones;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
 using Sanctuary.Packet.Common.Chat;
@@ -32,12 +33,7 @@ public sealed class RoleplayMiniature : Npc
 
     internal void DisposeFromScene()
     {
-        DisposeGracefully(
-            animate: true,
-            delay: 0,
-            effectDelay: 0,
-            compositeEffectId: 0,
-            duration: 500);
+        EntityHelper.RemovePlayerGracefully(this, animate: true, duration: 500);
     }
 
     internal void Speak(string message)

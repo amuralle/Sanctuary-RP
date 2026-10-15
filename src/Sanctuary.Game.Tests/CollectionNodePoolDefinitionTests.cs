@@ -58,7 +58,6 @@ public sealed class CollectionNodePoolDefinitionTests
             "[{\"Key\":\"test\",\"ZoneDefinitionId\":1,\"NodeType\":\"mushrooms\"," +
             "\"MaxActiveNodes\":-1,\"RespawnSeconds\":30," +
             "\"DropTable\":[{\"ItemDefinitionId\":1001,\"Weight\":1}]}]");
-
         try
         {
             var definitions = new CollectionNodePoolDefinitionCollection(NullLogger.Instance);
@@ -80,7 +79,6 @@ public sealed class CollectionNodePoolDefinitionTests
             "[{\"Key\":\"test\",\"ZoneDefinitionId\":1,\"NodeType\":\"mushrooms\"," +
             "\"MaxActiveNodes\":1,\"RespawnSeconds\":30," +
             "\"DropTable\":[{\"ItemDefinitionId\":1001,\"Weight\":0}]}]");
-
         try
         {
             var definitions = new CollectionNodePoolDefinitionCollection(NullLogger.Instance);

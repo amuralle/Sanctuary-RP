@@ -1,9 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
-using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Threading;
@@ -12,12 +12,19 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
+using Sanctuary.Core.Collections;
+using Sanctuary.Core.Extensions;
+using Sanctuary.Core.IO;
 using Sanctuary.Game.Entities;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Game.Resources.Definitions.Zones;
+using Sanctuary.Packet;
+using Sanctuary.Packet.Common;
 using Sanctuary.Scripting;
 using Sanctuary.UdpLibrary;
 using Sanctuary.Game.Pathfinding;
+using Sanctuary.Game.Terrain;
 
 namespace Sanctuary.Game.Zones;
 
@@ -25,14 +32,18 @@ namespace Sanctuary.Game.Zones;
 public abstract class BaseZone : IZone, IDisposable
 {
     private readonly ILogger _logger;
-    private readonly IResourceManager _resourceManager;
+    protected readonly IResourceManager _resourceManager;
+    private readonly IZoneManager _zoneManager;
+    private readonly IScriptManager _scriptManager;
+    private readonly ScriptRuntime _scriptRuntime;
     private readonly BaseZoneDefinition _zoneDefinition;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
 
     private const int VisibleTileRadius = 2;
     private readonly Dictionary<int, ZoneTile> _tiles;
 
-    private static ulong _nextNpcGuid = NpcBaseGuid;
+    private readonly object _npcGuidLock = new();
+    private ulong _nextNpcGuid = NpcBaseGuid;
 
     private readonly ConcurrentDictionary<ulong, Npc> _npcs = new();
     private readonly ConcurrentDictionary<ulong, Player> _players = new();
@@ -45,6 +56,7 @@ public abstract class BaseZone : IZone, IDisposable
     private readonly Dictionary<ulong, long> _roleplayMiniatureMovementTimes = new();
     private readonly Dictionary<ulong, long> _roleplayMiniatureEmoteTimes = new();
     private int _nextRoleplayMiniatureId = 1;
+    private readonly ConcurrentSet<string> _scripts = new();
 
     private const int FrameRate = 10;
     private const float TickRate = 1000f / FrameRate;
@@ -58,6 +70,9 @@ public abstract class BaseZone : IZone, IDisposable
     private readonly PeriodicTimer _updateEveryTickTimer = new(TimeSpan.FromMilliseconds(TickRate));
     private readonly PeriodicTimer _updateEverySecondTimer = new(TimeSpan.FromSeconds(1));
 
+    private Task _updateEveryTickTask = Task.CompletedTask;
+    private Task _updateEverySecondTask = Task.CompletedTask;
+
     public int Id { get; init; }
     public int DefinitionId => _zoneDefinition.Id;
     public string Name => _zoneDefinition.Name;
@@ -66,10 +81,26 @@ public abstract class BaseZone : IZone, IDisposable
     public Vector4 SpawnPosition => _zoneDefinition.SpawnPosition;
     public Quaternion SpawnRotation => _zoneDefinition.SpawnRotation;
 
+    public string? Sky => _zoneDefinition.Sky;
+
     public IEnumerable<Npc> Npcs => _npcs.Values;
     public IEnumerable<Player> Players => _players.Values;
 
-    private ScriptContext? _scriptContext;
+    public bool IsEmpty => _players.IsEmpty;
+
+    public IScriptManager ScriptManager => _scriptManager;
+    public ScriptRuntime ScriptRuntime => _scriptRuntime;
+
+    private readonly TerrainMesh? _terrainMesh;
+    private readonly NavMeshPathfinder? _navMeshPathfinder;
+    private readonly NavMeshPathfinder? _clientNavMeshPathfinder;
+
+    private const float RoadRouteMinDistance = 50f;
+    private const float RouteReachDistance = 1f;
+
+    public ulong? OwnerId { get; init; }
+
+    private bool _started = false;
 
     public Pathfinder<MapNode>? Pathfinder { get; }
 
@@ -77,14 +108,17 @@ public abstract class BaseZone : IZone, IDisposable
     {
         _zoneDefinition = zoneDefinition;
         _resourceManager = serviceProvider.GetRequiredService<IResourceManager>();
+        _zoneManager = serviceProvider.GetRequiredService<IZoneManager>();
 
         var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
 
         _logger = loggerFactory.CreateLogger($"Zone {Name} ({Id})");
 
-        var scriptManager = serviceProvider.GetRequiredService<IScriptManager>();
+        _scriptManager = serviceProvider.GetRequiredService<IScriptManager>();
+        _scriptRuntime = new ScriptRuntime(_logger);
 
-        _scriptContext = scriptManager.GetContextForZone(this);
+        foreach (var script in _zoneDefinition.Scripts ?? [])
+            _scripts.TryAdd(script);
 
         _tiles = GenerateTiles();
 
@@ -94,38 +128,634 @@ public abstract class BaseZone : IZone, IDisposable
             ArgumentNullException.ThrowIfNull(tile.Value.VisibleTiles);
         }
 
-        Task.Factory.StartNew(UpdateEveryTickAsync, _cancellationTokenSource.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-        Task.Factory.StartNew(UpdateEverySecondAsync, _cancellationTokenSource.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-
         // Just in case we don't actually have the `.map` file for a particular zone.
         if (_resourceManager.Maps.TryGetValue(Name, out var mapGraph))
             Pathfinder = new Pathfinder<MapNode>(mapGraph.Nodes, _logger);
+
+        if (_resourceManager.Terrains.TryGetValue(Name, out var terrainMesh))
+            _terrainMesh = terrainMesh;
+
+        if (_resourceManager.NavMeshes.TryGetValue(Name, out var navMesh))
+        {
+            _navMeshPathfinder = new NavMeshPathfinder(navMesh);
+            _clientNavMeshPathfinder = new NavMeshPathfinder(navMesh);
+        }
     }
+
+    public bool HasGroundData => _terrainMesh is not null;
+
+    public bool TryGetGroundHeight(float x, float z, float fromY, float maxDrop, out float height)
+    {
+        if (_terrainMesh is not null)
+            return _terrainMesh.TryGetGroundHeight(x, z, fromY, maxDrop, out height);
+
+        height = default;
+        return false;
+    }
+
+    public bool IsWalkable(Vector3 start, Vector3 goal, float maxStepUp, float maxStepDown, out float goalHeight)
+    {
+        if (_terrainMesh is not null)
+            return _terrainMesh.IsWalkable(start, goal, maxStepUp, maxStepDown, out goalHeight);
+
+        goalHeight = goal.Y;
+        return true;
+    }
+
+    public bool TryGetWalkableGoal(Vector3 start, Vector3 goal, float maxStepUp, float maxStepDown, out Vector3 walkableGoal)
+    {
+        walkableGoal = goal;
+
+        if (!IsWalkable(start, goal, maxStepUp, maxStepDown, out var goalHeight))
+            return false;
+
+        walkableGoal.Y = goalHeight;
+        return true;
+    }
+
+    public Vector3 GetGroundPosition(Vector3 position, float maxStepUp, float maxDrop)
+    {
+        if (TryGetGroundHeight(position.X, position.Z, position.Y + maxStepUp, maxDrop, out var groundHeight))
+            position.Y = groundHeight;
+
+        return position;
+    }
+
+    public bool HasNavMesh => _navMeshPathfinder is not null;
+
+    public bool TryFindNavMeshPath(Vector3 start, Vector3 goal, Queue<Vector3> waypoints) =>
+        _navMeshPathfinder is not null && _navMeshPathfinder.TryFindPath(start, goal, waypoints);
+
+    public bool TryFindClientNavMeshPath(Vector3 start, Vector3 goal, Queue<Vector3> waypoints) =>
+        _clientNavMeshPathfinder is not null && _clientNavMeshPathfinder.TryFindPath(start, goal, waypoints);
+
+    public bool TryFindRoute(Vector3 start, Vector3 goal, Queue<Vector3> waypoints)
+    {
+        if (Pathfinder is null || start.DistanceSquaredXZ(goal) < RoadRouteMinDistance * RoadRouteMinDistance)
+            return TryFindNavMeshPath(start, goal, waypoints);
+
+        var roadNodes = Pathfinder.FindPath(start, goal);
+
+        if (roadNodes.Count == 0 || !TryFindNavMeshPath(start, roadNodes[0].Position, waypoints)
+            || waypoints.Last().DistanceSquaredXZ(roadNodes[0].Position) > RouteReachDistance * RouteReachDistance)
+        {
+            return TryFindNavMeshPath(start, goal, waypoints);
+        }
+
+        for (var node = 1; node < roadNodes.Count; node++)
+            waypoints.Enqueue(roadNodes[node].Position);
+
+        var legWaypoints = new Queue<Vector3>();
+
+        if (TryFindNavMeshPath(roadNodes[^1].Position, goal, legWaypoints))
+        {
+            foreach (var waypoint in legWaypoints)
+                waypoints.Enqueue(waypoint);
+        }
+
+        return true;
+    }
+
+    public bool TryFindReachableRoute(Vector3 start, Vector3 goal, Queue<Vector3> waypoints, bool followRoads) =>
+        (followRoads ? TryFindRoute(start, goal, waypoints) : TryFindNavMeshPath(start, goal, waypoints))
+        && waypoints.Last().DistanceSquaredXZ(goal) <= RouteReachDistance * RouteReachDistance;
 
     #region Events
 
     public virtual void OnStart()
     {
-        ActivateCollectionNodePools();
+        if (_started)
+            return;
 
-        // fire and forget. safe since CallFunctionAsync does not throw.
-        _ = _scriptContext?.CallFunctionAsync("onStart", this).AsTask();
+        _started = true;
+
+        GetOrCreateScriptContext().FireEvent("start");
+        ActivateCollectionNodePools();
+        CreateNpcConversationGroups();
+
+        _updateEveryTickTask = Task.Factory.StartNew(UpdateEveryTickAsync, _cancellationTokenSource.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
+        _updateEverySecondTask = Task.Factory.StartNew(UpdateEverySecondAsync, _cancellationTokenSource.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
+    }
+
+    private const float NpcConversationRadius = 6f;
+
+    private void CreateNpcConversationGroups()
+    {
+        var talkers = _npcs.Values
+            .Select(npc => npc.AmbientController)
+            .OfType<NpcAmbientController>()
+            .Where(ambientController => ambientController.Definition.ConversationAnimationIds.Count > 0)
+            .ToList();
+
+        var grouped = new HashSet<NpcAmbientController>();
+
+        foreach (var talker in talkers)
+        {
+            if (grouped.Contains(talker))
+                continue;
+
+            var members = new List<NpcAmbientController> { talker };
+
+            for (var index = 0; index < members.Count; index++)
+            {
+                foreach (var other in talkers)
+                {
+                    if (grouped.Contains(other) || members.Contains(other))
+                        continue;
+
+                    var offset = other.Position - members[index].Position;
+                    if (offset.X * offset.X + offset.Z * offset.Z <= NpcConversationRadius * NpcConversationRadius)
+                        members.Add(other);
+                }
+            }
+
+            if (members.Count < 2)
+                continue;
+
+            var conversationGroup = new NpcConversationGroup(members);
+
+            foreach (var member in members)
+            {
+                member.ConversationGroup = conversationGroup;
+                grouped.Add(member);
+            }
+        }
     }
 
     public virtual void OnClientIsReady(Player player)
     {
+        SendQuickChatData(player);
+
+        SendUpdateStat(player);
+
+        var clientUpdatePacketHitpoints = new ClientUpdatePacketHitpoints
+        {
+            CurrentHitpoints = 2500,
+            MaxHitpoints = 2500
+        };
+
+        player.SendTunneled(clientUpdatePacketHitpoints);
+
+        var clientUpdatePacketMana = new ClientUpdatePacketMana
+        {
+            CurrentMana = 100,
+            MaxMana = 100
+        };
+
+        player.SendTunneled(clientUpdatePacketMana);
+
+        var playerUpdatePacketUpdateActiveWieldType = new PlayerUpdatePacketUpdateActiveWieldType
+        {
+            Guid = player.Guid,
+            WieldType = player.GetWieldType()
+        };
+
+        player.SendTunneled(playerUpdatePacketUpdateActiveWieldType);
+
+        SendGuildData(player);
+
+        SendReferenceData(player);
+
+        SendPlayerCustomizations(player);
+
+        SendMembershipSubscriptionInfo(player);
+
+        var playerUpdatePacketEffectTagCompositeEffectsEnable = new PlayerUpdatePacketEffectTagCompositeEffectsEnable
+        {
+            Enabled = true
+        };
+
+        player.SendTunneled(playerUpdatePacketEffectTagCompositeEffectsEnable);
+
+        var packetZoneDoneSendingInitialData = new PacketZoneDoneSendingInitialData();
+
+        player.SendTunneled(packetZoneDoneSendingInitialData);
+
+        var clientUpdatePacketDoneSendingPreloadCharacters = new ClientUpdatePacketDoneSendingPreloadCharacters();
+
+        player.SendTunneled(clientUpdatePacketDoneSendingPreloadCharacters);
+
+        SendFriendList(player);
+        SendIgnoreList(player);
+
+        UpdateFriendStatus(player);
     }
 
     public virtual void OnClientFinishedLoading(Player player)
     {
     }
 
+    private void SendQuickChatData(Player player)
+    {
+        var quickChatSendDataPacket = new QuickChatSendDataPacket();
+
+        quickChatSendDataPacket.QuickChats = _resourceManager.QuickChats.ToDictionary();
+
+        player.SendTunneled(quickChatSendDataPacket);
+    }
+
+    private void SendUpdateStat(Player player)
+    {
+        var clientUpdatePacketUpdateStat = new ClientUpdatePacketUpdateStat();
+
+        clientUpdatePacketUpdateStat.Guid = player.Guid;
+
+        // TODO
+        clientUpdatePacketUpdateStat.Stats.AddRange(
+        [
+            new CharacterStat(CharacterStatId.MaxHealth, 2500),
+            new CharacterStat(CharacterStatId.MaxMovementSpeed, 8f),
+            new CharacterStat(CharacterStatId.WeaponRange, 5f),
+            new CharacterStat(CharacterStatId.HitPointRegen, 25),
+            new CharacterStat(CharacterStatId.MaxMana, 100),
+            new CharacterStat(CharacterStatId.ManaRegen, 4),
+            new CharacterStat(CharacterStatId.MeleeChanceToHit, 100),
+            new CharacterStat(CharacterStatId.MeleeWeaponDamageMultiplier, 1f),
+            new CharacterStat(CharacterStatId.MeleeHandToHandDamage, 1),
+            new CharacterStat(CharacterStatId.EquippedMeleeWeaponDamage, 1),
+            new CharacterStat(CharacterStatId.MeleeAttackIntervalMs, 2000),
+            new CharacterStat(CharacterStatId.DamageMultiplier, 1f),
+            new CharacterStat(CharacterStatId.HealingMultiplier, 1f),
+            new CharacterStat(CharacterStatId.AbilityCriticalHitMultiplier, 1f),
+            new CharacterStat(CharacterStatId.HeadInflationPercent, 100),
+            new CharacterStat(CharacterStatId.RangeMultiplier, 1f),
+            new CharacterStat(CharacterStatId.FactoryProductionModifier, 1f),
+            new CharacterStat(CharacterStatId.FactoryYieldModifier, 1f),
+            new CharacterStat(CharacterStatId.InCombatHitPointRegen, 6),
+            new CharacterStat(CharacterStatId.InCombatManaRegen, 4)
+        ]);
+
+        player.SendTunneled(clientUpdatePacketUpdateStat);
+    }
+
+    private void SendGuildData(Player player)
+    {
+        var guildCanCreateGuildPacket = new GuildCanCreateGuildPacket
+        {
+            CanCreateGuild = player.Profiles.Any(x => x.Rank >= 15) && player.GuildData is null
+        };
+
+        player.SendTunneled(guildCanCreateGuildPacket);
+
+        if (player.GuildData is null)
+            return;
+
+        var guildDataFullPacket = new GuildDataFullPacket
+        {
+            Data = player.GuildData,
+            Guid = player.GuildData.Guid
+        };
+
+        player.SendTunneled(guildDataFullPacket);
+
+        var guildPlayerStatusUpdatePacket = new GuildPlayerStatusUpdatePacket
+        {
+            PlayerGuid = player.Guid,
+            GuildGuid = player.GuildData.Guid,
+            IsInGuild = true
+        };
+
+        player.SendTunneled(guildPlayerStatusUpdatePacket);
+
+        if (!player.GuildData.Members.TryGetValue(player.Guid, out var playerGuildMember))
+            return;
+
+        var guildMemberStatusUpdatePacket = new GuildMemberStatusUpdatePacket
+        {
+            GuildGuid = player.GuildData.Guid,
+            MemberGuid = player.Guid,
+
+            Name = player.Name,
+            Role = playerGuildMember.Role,
+            Online = true,
+
+            Type = 6,
+
+            WorldId = player.Zone.Id,
+
+            ProfileId = player.ActiveProfileId,
+            ProfileRank = player.ActiveProfile.Rank
+        };
+
+        foreach (var guildMember in player.GuildData.Members)
+        {
+            if (guildMember.Key == player.Guid)
+                continue;
+
+            if (!_zoneManager.TryGetPlayer(guildMember.Key, out var guildPlayer))
+                continue;
+
+            if (guildPlayer.GuildData is null)
+                continue;
+
+            if (guildPlayer.GuildData.Members.TryGetValue(player.Guid, out var onlineMember))
+            {
+                onlineMember.Online = true;
+                onlineMember.WorldId = player.Zone.Id;
+                onlineMember.ProfileId = player.ActiveProfileId;
+                onlineMember.ProfileRank = player.ActiveProfile.Rank;
+            }
+            else
+            {
+                guildPlayer.GuildData.Members[player.Guid] = new GuildMember
+                {
+                    Guid = player.Guid,
+                    Name = player.Name,
+                    Role = playerGuildMember.Role,
+                    Online = true,
+                    WorldId = player.Zone.Id,
+                    ProfileId = player.ActiveProfileId,
+                    ProfileRank = player.ActiveProfile.Rank
+                };
+            }
+
+            guildPlayer.SendTunneled(guildMemberStatusUpdatePacket);
+        }
+    }
+
+    private void SendReferenceData(Player player)
+    {
+        var referenceDataPacketItemClassDefinitions = new ReferenceDataPacketItemClassDefinitions();
+
+        referenceDataPacketItemClassDefinitions.ItemClasses = _resourceManager.ItemClasses.ToDictionary();
+
+        player.SendTunneled(referenceDataPacketItemClassDefinitions);
+
+        var referenceDataPacketItemCategoryDefinitions = new ReferenceDataPacketItemCategoryDefinitions();
+
+        referenceDataPacketItemCategoryDefinitions.ItemCategories = _resourceManager.ItemCategories.ToDictionary();
+        referenceDataPacketItemCategoryDefinitions.ItemCategoryGroups = _resourceManager.ItemCategoryGroups.ToDictionary();
+
+        player.SendTunneled(referenceDataPacketItemCategoryDefinitions);
+
+        var referenceDataPacketClientProfileData = new ReferenceDataPacketClientProfileData();
+
+        referenceDataPacketClientProfileData.Profiles = _resourceManager.Profiles.ToDictionary();
+
+        player.SendTunneled(referenceDataPacketClientProfileData);
+    }
+
+    protected void SendShopData(Player player)
+    {
+        if (player.ShopDataSent)
+            return;
+
+        player.ShopDataSent = true;
+
+        SendCoinStoreItemList(player);
+        SendInGamePurchase(player);
+    }
+
+    private void SendCoinStoreItemList(Player player)
+    {
+        var coinStoreItemListPacket = new CoinStoreItemListPacket();
+
+        coinStoreItemListPacket.StaticItems = _resourceManager.CoinStoreItems.ToDictionary();
+
+        player.SendTunneled(coinStoreItemListPacket);
+    }
+
+
+    private void SendPlayerCustomizations(Player player)
+    {
+        var playerUpdatePacketCustomizationData = new PlayerUpdatePacketCustomizationData();
+
+        var customizations = new[]
+        {
+            new PlayerCustomizationData
+            {
+                Id = 0, // Head
+                Param = player.HeadId,
+                StringParam = player.Head
+            },
+            new PlayerCustomizationData
+            {
+                Id = 1, // Skin Tone
+                Param = player.SkinToneId,
+                StringParam = player.SkinTone
+            },
+            new PlayerCustomizationData
+            {
+                Id = 2, // Hair
+                Param = player.HairId,
+                StringParam = player.Hair
+            },
+            new PlayerCustomizationData
+            {
+                Id = 3, // Hair Color
+                Param = player.HairColor
+            },
+            new PlayerCustomizationData
+            {
+                Id = 4, // Eye Color
+                Param = player.EyeColor
+            },
+            new PlayerCustomizationData
+            {
+                Id = 5, // Model Customization
+                Param = player.ModelCustomizationId,
+                StringParam = player.ModelCustomization
+            },
+            new PlayerCustomizationData
+            {
+                Id = 6, // Face Paint
+                Param = player.FacePaintId,
+                StringParam = player.FacePaint
+            },
+            new PlayerCustomizationData
+            {
+                Id = 8, // Model
+                Param = player.Model
+            }
+        };
+
+        playerUpdatePacketCustomizationData.Customizations.AddRange(customizations);
+
+        player.SendTunneled(playerUpdatePacketCustomizationData);
+    }
+
+    private void SendMembershipSubscriptionInfo(Player player)
+    {
+        bool isReferee = player.IsAdmin || player.IsMod;
+        var packetMembershipSubscriptionInfo = new PacketMembershipSubscriptionInfo
+        {
+            IsMember = player.MembershipStatus != 0,
+            IsReferee = isReferee
+        };
+
+        player.SendTunneled(packetMembershipSubscriptionInfo);
+    }
+
+    private void SendInGamePurchase(Player player)
+    {
+        var packetInGamePurchaseStoreBundleGroups = new PacketInGamePurchaseStoreBundleGroups
+        {
+            BundleGroups = _resourceManager.StoreBundleGroups.ToDictionary()
+        };
+
+        var packetInGamePurchaseEnableMarketplace = new PacketInGamePurchaseEnableMarketplace
+        {
+            Enabled = true
+        };
+
+        player.SendTunneled(packetInGamePurchaseEnableMarketplace);
+
+        var packetInGamePurchaseStoreEnablePaymentSources = new PacketInGamePurchaseStoreEnablePaymentSources
+        {
+            Sms = true,
+            Paypal = true
+        };
+
+        player.SendTunneled(packetInGamePurchaseStoreEnablePaymentSources);
+
+        var packetInGamePurchaseStoreBundleCategoryGroups = new PacketInGamePurchaseStoreBundleCategoryGroups();
+
+        packetInGamePurchaseStoreBundleCategoryGroups.CategoryGroups = _resourceManager.StoreBundleCategoryGroups.ToDictionary();
+
+        player.SendTunneled(packetInGamePurchaseStoreBundleCategoryGroups);
+
+        var packetInGamePurchaseStoreBundleCategories = new PacketInGamePurchaseStoreBundleCategories();
+
+        packetInGamePurchaseStoreBundleCategories.CategoryTree.Categories = _resourceManager.StoreBundleCategories.ToDictionary();
+
+        player.SendTunneled(packetInGamePurchaseStoreBundleCategories);
+
+        if (_resourceManager.Stores.TryGetValue(1, out var mainStore))
+        {
+            var packetInGamePurchaseStoreBundles = new PacketInGamePurchaseStoreBundles();
+
+            packetInGamePurchaseStoreBundles.StoreId = mainStore.Id;
+
+            packetInGamePurchaseStoreBundles.Store.Id = mainStore.Id;
+            packetInGamePurchaseStoreBundles.Store.NameId = mainStore.NameId;
+            packetInGamePurchaseStoreBundles.Store.DescriptionId = mainStore.DescriptionId;
+            packetInGamePurchaseStoreBundles.Store.Image = mainStore.Image;
+
+            foreach (var storeBundle in mainStore.Bundles.Values)
+            {
+                var valid = storeBundle.Entries.All(x => _resourceManager.ClientItemDefinitions.ContainsKey(x.MarketingItemId));
+
+                if (valid)
+                    packetInGamePurchaseStoreBundles.Store.Bundles.Add(storeBundle.Id, storeBundle);
+            }
+
+            player.SendTunneled(packetInGamePurchaseStoreBundles);
+
+            if (packetInGamePurchaseStoreBundleGroups.BundleGroups.TryGetValue(WelcomeScreenHelper.PopularItemsGroupId, out var popularItems))
+                packetInGamePurchaseStoreBundleGroups.BundleGroups[WelcomeScreenHelper.PopularItemsGroupId] = WelcomeScreenHelper.GetPopularItems(
+                    popularItems, packetInGamePurchaseStoreBundles.Store.Bundles.Values);
+        }
+
+        player.SendTunneled(packetInGamePurchaseStoreBundleGroups);
+    }
+
+    private void SendFriendList(Player player)
+    {
+        var friendListPacket = new FriendListPacket();
+
+        friendListPacket.Friends = player.Friends;
+
+        player.SendTunneled(friendListPacket);
+    }
+
+    private void SendIgnoreList(Player player)
+    {
+        var ignoreListPacket = new IgnoreListPacket();
+
+        ignoreListPacket.Ignores = player.Ignores;
+
+        player.SendTunneled(ignoreListPacket);
+    }
+
+    private void UpdateFriendStatus(Player player)
+    {
+        var friendOnlinePacket = new FriendOnlinePacket();
+
+        friendOnlinePacket.Guid = player.Guid;
+
+        friendOnlinePacket.IsLocal = true;
+
+        var friendStatusPacket = new FriendStatusPacket
+        {
+            Guid = player.Guid,
+            Status =
+            {
+                ProfileId = player.ActiveProfile.Id,
+                ProfileRank = player.ActiveProfile.Rank,
+                ProfileIconId = player.ActiveProfile.Icon,
+                ProfileNameId = player.ActiveProfile.NameId,
+                ProfileBackgroundImageId = player.ActiveProfile.BadgeImageSet
+            }
+        };
+
+        foreach (var friend in player.Friends)
+        {
+            if (!_zoneManager.TryGetPlayer(friend.Guid, out var friendPlayer))
+                continue;
+
+            var otherFriendPlayer = friendPlayer.Friends.FirstOrDefault(x => x.Guid == player.Guid);
+
+            if (otherFriendPlayer is null || otherFriendPlayer.Online)
+                continue;
+
+            otherFriendPlayer.Online = true;
+
+            friendPlayer.SendTunneled(friendOnlinePacket);
+            friendPlayer.SendTunneled(friendStatusPacket);
+        }
+    }
+
     #endregion
 
-    #region Scripting
+    #region IScriptable
 
-    public bool TrySpawnNpc(int npcId, ulong? npcGuid, float x, float y, float z, float heading)
+    public ScriptContext GetOrCreateScriptContext()
     {
+        if (_scriptManager.GetOrCreateContext(this, out var context))
+        {
+            // Fresh context. Attach all scripts defined in the zone definition.
+            // We can't use `LoadScriptInBackground` here because we need to ensure that any `onStart` handlers are fully loaded.
+            foreach (var script in _scripts)
+                context.LoadScript(Path.Combine("Zone", script + ".lua"));
+        }
+
+        return context;
+    }
+
+    public bool TryAddScript(string scriptName)
+    {
+        var context = GetOrCreateScriptContext();
+
+        if (!_scripts.TryAdd(scriptName))
+            return false;
+
+        var scriptPath = Path.Combine("Zone", scriptName + ".lua");
+
+        context.LoadScriptInBackground(scriptPath);
+
+        return true;
+    }
+
+    public bool TryRemoveScript(string scriptName)
+    {
+        if (!_scripts.TryRemove(scriptName))
+            return false;
+
+        var context = GetOrCreateScriptContext();
+
+        var scriptPath = Path.Combine("Zone", scriptName + ".lua");
+
+        return context.UnloadScript(scriptPath);
+    }
+
+    #endregion
+
+    #region Scripting API
+
+    public bool TrySpawnNpc(int npcId, ulong? npcGuid, float x, float y, float z, float heading, float pitch, float roll, [MaybeNullWhen(false)] out IScriptableNpc npc)
+    {
+        npc = null;
+
         if (npcGuid.HasValue)
         {
             if (_npcs.ContainsKey(npcGuid.Value))
@@ -142,17 +772,31 @@ public abstract class BaseZone : IZone, IDisposable
             return false;
         }
 
-        if (!TryCreateNpc(npcGuid, definition, out var npc))
+        if (!TryCreateNpc(npcGuid, definition, out var spawnedNpc))
         {
             _logger.LogWarning("Failed to spawn NPC {NpcId}: Could not create NPC instance.", npcId);
             return false;
         }
 
         var position = new Vector4(x, y, z, 1f);
-        var rotation = new Quaternion(MathF.Sin(heading), 0f, MathF.Cos(heading), 0f);
+        var rotation = QuaternionExtensions.FromHeading(heading);
 
-        npc.UpdatePosition(position, rotation);
+        if (definition.IsPlacedObject || pitch != 0f || roll != 0f)
+            spawnedNpc.Tilt = new Vector4(heading, pitch, roll, 0f);
 
+        spawnedNpc.UpdatePosition(position, rotation);
+
+        if (_resourceManager.NpcMovements.TryGetForNpc(spawnedNpc.Guid, definition.ModelFileName, out var npcMovementDefinition))
+            spawnedNpc.MovementController = new NpcMovementController(spawnedNpc, npcMovementDefinition);
+
+        if (_resourceManager.NpcAmbient.TryGetForModel(definition.ModelFileName, out var npcAmbientDefinition))
+            spawnedNpc.AmbientController = new NpcAmbientController(spawnedNpc, npcAmbientDefinition);
+
+        if (definition.BoomboxItemId != 0 && _resourceManager.Consumables.Boomboxes.TryGetValue(definition.BoomboxItemId, out var boomboxDefinition))
+            Sanctuary.Game.Helpers.BoomboxHelper.StartDanceLoop(this, spawnedNpc, position, boomboxDefinition,
+                0, 0, 0, 0, permanent: true);
+
+        npc = spawnedNpc;
         return true;
     }
 
@@ -175,24 +819,49 @@ public abstract class BaseZone : IZone, IDisposable
         return _entities.TryGetValue(guid, out entity);
     }
 
-    public bool TryAddMount(Mount mount)
+    public bool TryAddMount(Mount mount) => TryRegisterEntity(_npcs, mount);
+
+    public bool TryAddPlayer(Player player) => TryRegisterEntity(_players, player);
+
+    public bool TryCreateNpc([MaybeNullWhen(false)] out Npc npc)
     {
-        return _npcs.TryAdd(mount.Guid, mount) && _entities.TryAdd(mount.Guid, mount);
+        return TryCreateNpc(null, out npc);
     }
 
-    public bool TryAddPlayer(Player player)
+    public bool TryAddNpc<TNpc>(Func<IZone, ulong, TNpc> createNpc, [MaybeNullWhen(false)] out TNpc npc) where TNpc : Npc
     {
-        return _players.TryAdd(player.Guid, player) && _entities.TryAdd(player.Guid, player);
+        return TryAddNpc(null, createNpc, out npc);
+    }
+
+    private bool TryAddNpc<TNpc>(ulong? guid, Func<IZone, ulong, TNpc> createNpc, [MaybeNullWhen(false)] out TNpc npc) where TNpc : Npc
+    {
+        npc = createNpc(this, GetNpcGuid(guid));
+
+        if (TryRegisterEntity(_npcs, npc))
+            return true;
+
+        npc = null;
+        return false;
+    }
+
+    private bool TryRegisterEntity<TEntity>(ConcurrentDictionary<ulong, TEntity> collection, TEntity entity)
+        where TEntity : IEntity
+    {
+        if (!collection.TryAdd(entity.Guid, entity))
+            return false;
+
+        if (!_entities.TryAdd(entity.Guid, entity))
+        {
+            collection.TryRemove(entity.Guid, out _);
+            return false;
+        }
+
+        return true;
     }
 
     public bool TryCreateNpc(ulong? guid, [MaybeNullWhen(false)] out Npc npc)
     {
-        npc = new Npc(this)
-        {
-            Guid = GetNpcGuid(guid)
-        };
-
-        return _npcs.TryAdd(npc.Guid, npc) && _entities.TryAdd(npc.Guid, npc);
+        return TryAddNpc(guid, (zone, npcGuid) => new Npc(zone) { Guid = npcGuid }, out npc);
     }
 
     public bool TryCreateNpc(ulong? guid, NpcDefinition definition, [MaybeNullWhen(false)] out Npc npc)
@@ -202,19 +871,75 @@ public abstract class BaseZone : IZone, IDisposable
         if (_resourceManager.Models.TryGetValue(definition.ModelId, out var model) && model.Scale != 0f)
             scale = model.Scale;
 
-        npc = new Npc(this)
-        {
-            Guid = GetNpcGuid(guid),
-            NameId = definition.NameId,
-            Name = definition.Name,
-            ModelId = definition.ModelId,
-            TextureAlias = definition.TextureAlias,
-            Scale = scale,
-            Static = true,
-            Visible = true
-        };
+        var npcGuid = GetNpcGuid(guid);
+        npc = _resourceManager.CollectionCoins.TryGetValue(definition.Id, out var coinDefinition)
+            ? new CollectionCoin(this, coinDefinition) { Guid = npcGuid }
+            : new Npc(this) { Guid = npcGuid };
 
-        return _npcs.TryAdd(npc.Guid, npc) && _entities.TryAdd(npc.Guid, npc);
+        npc.NameId = definition.NameId;
+        npc.Name = definition.Name;
+        npc.ModelId = definition.ModelId;
+        npc.TerrainObjectId = definition.TerrainObjectId;
+        npc.ReplaceTerrainObject = definition.ReplaceTerrainObject;
+        npc.OpensAtlas = definition.OpensAtlas;
+        npc.AutoSelectSingleInteraction = definition.AutoSelectSingleInteraction;
+        npc.InteractRange = definition.InteractRange;
+        npc.IsInteractable = definition.IsInteractable;
+        npc.CursorId = definition.CursorId;
+        npc.HasCursor = definition.HasCursor;
+        npc.RelevanceUnknown2 = definition.RelevanceUnknown2;
+        npc.TextureAlias = definition.TextureAlias;
+        npc.Scale = definition.Scale ?? scale;
+        npc.SubTextNameId = definition.SubTextNameId;
+        npc.AreaDefinitionId = definition.AreaDefinitionId;
+        npc.TintAlias = definition.TintAlias;
+        npc.TintId = definition.TintId;
+        npc.HideNamePlate = definition.HideNamePlate;
+        npc.Disposition = definition.Disposition;
+        npc.Animation = definition.Animation;
+        npc.CompositeEffectId = definition.CompositeEffectId;
+        npc.VerticalOffset = definition.VerticalOffset;
+        npc.InteractionList = definition.InteractionList;
+        npc.InteractionUnknown = definition.InteractionUnknown;
+        npc.MerchantList = definition.MerchantList;
+        npc.Ability = definition.Ability;
+        npc.Attachments = new List<CharacterAttachmentData>(definition.Attachments);
+        npc.Visible = true;
+
+        if (npc is CollectionCoin)
+        {
+            npc.NameId = 0;
+            npc.Name = $"{definition.Name} #{definition.Id}";
+            npc.CursorId = 18;
+            npc.HasCursor = true;
+            npc.InteractRange = 12;
+        }
+
+        if (definition.Notification is not null)
+            npc.Notification = Sanctuary.Game.Helpers.InteractionMenuHelper.GetNotification(npc.Guid, definition.Notification);
+
+        foreach (var notification in definition.Notifications)
+            npc.Notifications.Add(Sanctuary.Game.Helpers.InteractionMenuHelper.GetNotification(npc.Guid, notification));
+
+        if (!TryRegisterEntity(_npcs, npc))
+        {
+            npc = null;
+            return false;
+        }
+
+        if (definition.Notification is not null)
+            npc.Notification = Sanctuary.Game.Helpers.InteractionMenuHelper.GetNotification(npc.Guid, definition.Notification);
+
+        if (definition.OpensAtlas)
+            npc.Interactions.Add(Sanctuary.Game.Interactions.OpenAtlasInteraction.Data);
+
+        foreach (var script in definition.Scripts ?? [])
+        {
+            if (!npc.TryAddScript(script))
+                _logger.LogWarning("NPC {NpcName} ({NpcGuid}) already has script {Script}", npc.Name, npc.Guid, script);
+        }
+
+        return true;
     }
 
     public IReadOnlyList<CollectionNodePoolStatus> GetCollectionNodePoolStatuses()
@@ -278,7 +1003,8 @@ public abstract class BaseZone : IZone, IDisposable
             if (string.IsNullOrWhiteSpace(poolKey) ||
                 !_resourceManager.CollectionNodePools.TryGetValue(poolKey.Trim().ToLowerInvariant(), out var poolDefinition) ||
                 poolDefinition.ZoneDefinitionId != DefinitionId ||
-                !_resourceManager.CollectionNodeTypes.TryGetValue(poolDefinition.NodeType, out var typeDefinition))
+                !_resourceManager.CollectionNodeTypes.TryGetValue(poolDefinition.NodeType, out var typeDefinition) ||
+                GetTileFromPosition(position) == ZoneTile.Empty)
             {
                 return false;
             }
@@ -357,7 +1083,7 @@ public abstract class BaseZone : IZone, IDisposable
             if (radius <= 0)
                 return false;
 
-            var position3 = new Vector3(position.X, position.Y, position.Z);
+            var position3 = position.ToVector3();
             var node = _npcs.Values
                 .OfType<CollectionNode>()
                 .Where(candidate => _resourceManager.CollectionNodeSpawns.ContainsKey(candidate.SpawnDefinition.Id))
@@ -365,7 +1091,7 @@ public abstract class BaseZone : IZone, IDisposable
                 {
                     Node = candidate,
                     DistanceSquared = Vector3.DistanceSquared(
-                        new Vector3(candidate.Position.X, candidate.Position.Y, candidate.Position.Z), position3)
+                        candidate.Position.ToVector3(), position3)
                 })
                 .Where(candidate => candidate.DistanceSquared <= radius * radius)
                 .OrderBy(candidate => candidate.DistanceSquared)
@@ -448,7 +1174,7 @@ public abstract class BaseZone : IZone, IDisposable
             if (!_npcs.ContainsKey(node.Guid))
                 return;
 
-            node.DisposeAfterCollection();
+            EntityHelper.RemovePlayerGracefully(node, animate: true);
 
             if (!_resourceManager.CollectionNodePools.TryGetValue(node.PoolDefinition.Key, out var poolDefinition) ||
                 poolDefinition.ZoneDefinitionId != DefinitionId)
@@ -469,20 +1195,22 @@ public abstract class BaseZone : IZone, IDisposable
     {
         node = new CollectionNode(this, typeDefinition, poolDefinition, spawnDefinition)
         {
-            Guid = _nextNpcGuid++,
+            Guid = GetNpcGuid(null),
             Name = typeDefinition.Name,
-            SubTextNameId = typeDefinition.SubTextNameId,
             ModelId = typeDefinition.ModelId,
             Scale = typeDefinition.Scale,
             CompositeEffectId = typeDefinition.CompositeEffectId,
+            SubTextNameId = typeDefinition.SubTextNameId,
             InteractRange = typeDefinition.InteractRange,
             CursorId = typeDefinition.CursorId,
-            Static = true,
             Visible = true
         };
 
-        if (!_npcs.TryAdd(node.Guid, node) || !_entities.TryAdd(node.Guid, node))
+        if (!TryRegisterEntity(_npcs, node))
+        {
+            node = null;
             return false;
+        }
 
         node.UpdatePosition(spawnDefinition.SpawnPosition, spawnDefinition.SpawnRotation);
 
@@ -620,7 +1348,6 @@ public abstract class BaseZone : IZone, IDisposable
                 CursorId = 18,
                 InteractRange = 15,
                 IsInteractable = true,
-                MovementType = 2,
                 Speed = RoleplayMiniatureRules.MovementSpeed,
                 WaypointTolerance = RoleplayMiniatureRules.WaypointTolerance,
                 Static = false,
@@ -879,20 +1606,32 @@ public abstract class BaseZone : IZone, IDisposable
     {
         mount = new Mount(this, rider, definition)
         {
-            Guid = _nextNpcGuid++
+            Guid = GetNpcGuid(null)
         };
 
-        return _npcs.TryAdd(mount.Guid, mount) && _entities.TryAdd(mount.Guid, mount);
+        if (!TryRegisterEntity(_npcs, mount))
+        {
+            mount = null;
+            return false;
+        }
+
+        return true;
     }
 
     public bool TryCreatePlayer(ulong guid, UdpConnection connection, [MaybeNullWhen(false)] out Player player)
     {
-        player = new Player(this, connection, _resourceManager)
+        player = new Player(this, connection, _resourceManager, _zoneManager)
         {
             Guid = guid
         };
 
-        return _players.TryAdd(player.Guid, player) && _entities.TryAdd(player.Guid, player);
+        if (!TryRegisterEntity(_players, player))
+        {
+            player = null;
+            return false;
+        }
+
+        return true;
     }
 
     public bool TryRemoveNpc(ulong guid)
@@ -902,7 +1641,12 @@ public abstract class BaseZone : IZone, IDisposable
 
     public bool TryRemovePlayer(ulong guid)
     {
-        return _players.TryRemove(guid, out _) && _entities.TryRemove(guid, out _);
+        if (!_players.TryRemove(guid, out _))
+            return false;
+
+        BoomboxHelper.RemovePlayer(this, guid);
+
+        return _entities.TryRemove(guid, out _);
     }
 
     #endregion
@@ -995,7 +1739,6 @@ public abstract class BaseZone : IZone, IDisposable
     {
         var npcsToAdd = new List<Npc>();
         var playersToAdd = new List<Player>();
-
         foreach (var zoneTile in zoneTiles)
         {
             foreach (var zoneTileEntity in zoneTile.Entities)
@@ -1148,9 +1891,6 @@ public abstract class BaseZone : IZone, IDisposable
 
                 foreach (var entity in _entities)
                 {
-                    if (entity.Value is Npc { Static: true })
-                        continue;
-
                     entity.Value.UpdateEveryTick();
                 }
             }
@@ -1169,11 +1909,10 @@ public abstract class BaseZone : IZone, IDisposable
             {
                 foreach (var entity in _entities)
                 {
-                    if (entity.Value is Npc { Static: true })
-                        continue;
-
                     entity.Value.UpdateEverySecond();
                 }
+
+                UpdateEverySecond();
             }
             catch (Exception ex)
             {
@@ -1182,29 +1921,74 @@ public abstract class BaseZone : IZone, IDisposable
         }
     }
 
+    protected virtual void UpdateEverySecond()
+    {
+        GetOrCreateScriptContext().FireEvent("second");
+    }
+
+    public virtual void SetClientAreaEnabled(int areaId, bool enabled)
+    {
+    }
+
+    public virtual bool IsSeasonActive(string seasonName) => false;
+
+    public void Broadcast(string message)
+    {
+        var broadcastPacketZone = new BroadcastPacketZone { Message = message };
+
+        foreach (var player in Players)
+            player.SendTunneled(broadcastPacketZone);
+    }
+
+    public void BroadcastNear(string message, float x, float z, float radius)
+    {
+        var broadcastPacketZone = new BroadcastPacketZone { Message = message };
+        var center = new Vector2(x, z);
+
+        foreach (var player in Players)
+        {
+            if (Vector2.Distance(new Vector2(player.Position.X, player.Position.Z), center) <= radius)
+                player.SendTunneled(broadcastPacketZone);
+        }
+    }
+
     #endregion
 
     private ulong GetNpcGuid(ulong? guid)
     {
-        if (guid.HasValue)
+        lock (_npcGuidLock)
         {
-            _nextNpcGuid = Math.Max(_nextNpcGuid, guid.Value + 1);
-            return guid.Value;
-        }
+            if (guid.HasValue)
+            {
+                _nextNpcGuid = Math.Max(_nextNpcGuid, guid.Value + 1);
+                return guid.Value;
+            }
 
-        return _nextNpcGuid++;
+            return _nextNpcGuid++;
+        }
     }
 
     public void Dispose()
     {
         _cancellationTokenSource.Cancel();
 
+        _updateEveryTickTimer.Dispose();
+        _updateEverySecondTimer.Dispose();
+
+        Task.WaitAll(_updateEveryTickTask, _updateEverySecondTask);
+
         lock (_collectionNodeLock)
             _collectionNodeRefills.Clear();
 
         _tiles.Clear();
 
+        foreach (var npc in _npcs.Values.ToList())
+            npc.Dispose();
+
         _npcs.Clear();
         _players.Clear();
+
+        _scriptManager.DeleteContext(this);
     }
+
 }
