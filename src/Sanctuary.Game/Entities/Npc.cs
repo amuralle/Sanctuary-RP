@@ -44,6 +44,7 @@ public class Npc : IScriptableNpc, IEntity
     public ZoneTile ZoneTile { get; protected set; } = ZoneTile.Empty;
     public ConcurrentDictionary<ulong, Npc> VisibleNpcs { get; } = [];
     public ConcurrentDictionary<ulong, Player> VisiblePlayers { get; } = [];
+    public virtual bool TracksVisibleNpcs => true;
     public ILogger Logger => Zone.Logger;
 
     public RoutineManager Routines { get; }
@@ -229,7 +230,7 @@ public class Npc : IScriptableNpc, IEntity
 
     #region Update
 
-    public void UpdateEveryTick()
+    public virtual void UpdateEveryTick()
     {
         Routines.OnTick();
 
@@ -241,7 +242,7 @@ public class Npc : IScriptableNpc, IEntity
         AmbientController?.Update();
     }
 
-    public void UpdateEverySecond()
+    public virtual void UpdateEverySecond()
     {
         UpdateEverySecondAction?.Invoke();
 

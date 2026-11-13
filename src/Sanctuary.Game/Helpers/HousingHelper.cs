@@ -25,7 +25,7 @@ public static class HousingHelper
 
     public const int PreviewHouseKey = 0;
 
-    private const int MaxFixtureCount = 9999;
+    private const int MaxFixtureCount = HousingFixtureManager.MaxFixtureCount;
     private const int MaxLandmarkCount = 100;
 
     public const string RatingSystem = "Housing";

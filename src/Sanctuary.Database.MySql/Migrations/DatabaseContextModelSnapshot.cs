@@ -97,6 +97,7 @@ namespace Sanctuary.Database.MySql.Migrations
                         .HasDefaultValue(1);
 
                     b.Property<int>("Coins")
+                        .IsConcurrencyToken()
                         .HasColumnType("int");
 
                     b.Property<DateTimeOffset>("Created")
@@ -417,6 +418,65 @@ namespace Sanctuary.Database.MySql.Migrations
                     b.ToTable("Houses");
                 });
 
+            modelBuilder.Entity("Sanctuary.Database.Entities.DbHouseFixture", b =>
+                {
+                    b.Property<ulong>("Id")
+                        .HasColumnType("bigint unsigned");
+
+                    b.Property<ulong>("CharacterId")
+                        .HasColumnType("bigint unsigned");
+
+                    b.Property<ulong>("HouseId")
+                        .HasColumnType("bigint unsigned");
+
+                    b.Property<int>("ItemDefinitionId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ItemId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PlacementId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<float>("PositionX")
+                        .HasColumnType("float");
+
+                    b.Property<float>("PositionY")
+                        .HasColumnType("float");
+
+                    b.Property<float>("PositionZ")
+                        .HasColumnType("float");
+
+                    b.Property<float>("RotationW")
+                        .HasColumnType("float");
+
+                    b.Property<float>("RotationX")
+                        .HasColumnType("float");
+
+                    b.Property<float>("RotationY")
+                        .HasColumnType("float");
+
+                    b.Property<float>("RotationZ")
+                        .HasColumnType("float");
+
+                    b.Property<float>("Scale")
+                        .HasColumnType("float");
+
+                    b.Property<int>("Tint")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HouseId");
+
+                    b.HasIndex("PlacementId")
+                        .IsUnique();
+
+                    b.HasIndex("ItemId", "CharacterId");
+
+                    b.ToTable("HouseFixtures");
+                });
+
             modelBuilder.Entity("Sanctuary.Database.Entities.DbHouseVote", b =>
                 {
                     b.Property<ulong>("HouseId")
@@ -490,6 +550,7 @@ namespace Sanctuary.Database.MySql.Migrations
                         .HasColumnType("bigint unsigned");
 
                     b.Property<int>("Count")
+                        .IsConcurrencyToken()
                         .HasColumnType("int");
 
                     b.Property<DateTimeOffset>("Created")
@@ -498,9 +559,11 @@ namespace Sanctuary.Database.MySql.Migrations
                         .HasDefaultValueSql("NOW()");
 
                     b.Property<int>("Definition")
+                        .IsConcurrencyToken()
                         .HasColumnType("int");
 
                     b.Property<int>("Tint")
+                        .IsConcurrencyToken()
                         .HasColumnType("int");
 
                     b.HasKey("Id", "CharacterId");
@@ -849,6 +912,25 @@ namespace Sanctuary.Database.MySql.Migrations
                         .IsRequired();
 
                     b.Navigation("Character");
+                });
+
+            modelBuilder.Entity("Sanctuary.Database.Entities.DbHouseFixture", b =>
+                {
+                    b.HasOne("Sanctuary.Database.Entities.DbHouse", "House")
+                        .WithMany()
+                        .HasForeignKey("HouseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Sanctuary.Database.Entities.DbItem", "Item")
+                        .WithMany()
+                        .HasForeignKey("ItemId", "CharacterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("House");
+
+                    b.Navigation("Item");
                 });
 
             modelBuilder.Entity("Sanctuary.Database.Entities.DbHouseVote", b =>

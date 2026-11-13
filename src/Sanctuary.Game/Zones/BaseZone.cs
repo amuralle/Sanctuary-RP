@@ -1448,6 +1448,11 @@ public abstract class BaseZone : IZone, IDisposable
 
     private void AddEntityToZoneTiles(IEntity entity, IEnumerable<ZoneTile> zoneTiles)
     {
+        if (entity is Npc { TracksVisibleNpcs: false } playerObserver)
+        {
+            UpdateNpcPlayerVisibility(playerObserver, zoneTiles, adding: true);
+            return;
+        }
         var npcsToAdd = new List<Npc>();
         var playersToAdd = new List<Player>();
         foreach (var zoneTile in zoneTiles)
@@ -1509,6 +1514,11 @@ public abstract class BaseZone : IZone, IDisposable
 
     private void RemoveEntityFromZoneTiles(IEntity entity, IEnumerable<ZoneTile> zoneTiles)
     {
+        if (entity is Npc { TracksVisibleNpcs: false } playerObserver)
+        {
+            UpdateNpcPlayerVisibility(playerObserver, zoneTiles, adding: false);
+            return;
+        }
         var npcsToRemove = new List<Npc>();
         var playersToRemove = new List<Player>();
 
@@ -1570,6 +1580,35 @@ public abstract class BaseZone : IZone, IDisposable
 
         entity.OnRemoveVisibleNpcs(npcsToRemove);
         entity.OnRemoveVisiblePlayers(playersToRemove);
+    }
+
+    private void UpdateNpcPlayerVisibility(Npc npc, IEnumerable<ZoneTile> zoneTiles, bool adding)
+    {
+        // Furniture only observes players, so do not scan every nearby decoration on each placement.
+        if (_players.IsEmpty)
+            return;
+        var tiles = zoneTiles.ToHashSet();
+        if (tiles.Count == 0)
+            return;
+        var players = new List<Player>();
+        foreach (var pair in _players)
+        {
+            var player = pair.Value;
+            if (!player.Visible || !tiles.Contains(player.ZoneTile))
+                continue;
+            players.Add(player);
+            if (npc.Visible)
+            {
+                if (adding)
+                    player.OnAddVisibleNpcs(npc);
+                else
+                    player.OnRemoveVisibleNpcs(npc);
+            }
+        }
+        if (adding)
+            npc.OnAddVisiblePlayers(players);
+        else
+            npc.OnRemoveVisiblePlayers(players);
     }
 
     #endregion
@@ -1664,7 +1703,7 @@ public abstract class BaseZone : IZone, IDisposable
         }
     }
 
-    public void Dispose()
+    public virtual void Dispose()
     {
         _cancellationTokenSource.Cancel();
 

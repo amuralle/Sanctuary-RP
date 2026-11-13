@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 
 using Microsoft.Extensions.Logging;
@@ -44,14 +45,18 @@ public class HouseDefinitionCollection : ObservableConcurrentDictionary<int, Hou
                 return false;
             }
 
-            foreach (var entry in entries)
+            if (entries.Count == 0 || entries.Any(entry => entry is null || entry.Id <= 0 || entry.Id >= (1 << 30) || entry.ZoneId <= 0)
+                || entries.Select(entry => entry.Id).Distinct().Count() != entries.Count
+                || entries.Select(entry => entry.ZoneId).Distinct().Count() != entries.Count)
             {
-                if (!TryAdd(entry.Id, entry))
-                {
-                    _logger.LogWarning("Failed to add entry. {id} \"{file}\"", entry.Id, filePath);
-                    continue;
-                }
+                _logger.LogError("Invalid or duplicate house definitions found in \"{file}\".", filePath);
+                return false;
             }
+
+            // Validate before replacing the catalog; bit 30 is reserved by housing instance keys.
+            Clear();
+            foreach (var entry in entries)
+                TryAdd(entry.Id, entry);
         }
         catch (Exception ex)
         {

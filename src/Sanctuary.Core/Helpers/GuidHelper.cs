@@ -136,6 +136,11 @@ public static class GuidHelper
         return GetPrefixedId(GuidPrefix.Fixture, guid);
     }
 
+    public static bool IsFixtureGuid(ulong guid)
+    {
+        return HasPrefix(GuidPrefix.Fixture, guid);
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsType(GuidType type, ulong guid)
     {

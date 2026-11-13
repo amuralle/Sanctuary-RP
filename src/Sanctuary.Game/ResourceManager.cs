@@ -50,6 +50,7 @@ public class ResourceManager : IResourceManager, IDisposable
     public static readonly string ZoneEnvironmentsDirectory = Path.Combine(ZonesDirectory, "Environments");
     public static readonly string ZoneNpcsDirectory = Path.Combine(ZonesDirectory, "Npcs");
     public static readonly string HousesFile = Path.Combine(BaseDirectory, "Houses.json");
+    public static readonly string HousingFixturesFile = Path.Combine(BaseDirectory, "HousingFixtures.json");
     public static readonly string PetsFile = Path.Combine(BaseDirectory, "Pets.json");
     public static readonly string MountsFile = Path.Combine(BaseDirectory, "Mounts.json");
     public static readonly string ProfilesFile = Path.Combine(BaseDirectory, "Profiles.json");
@@ -99,6 +100,7 @@ public class ResourceManager : IResourceManager, IDisposable
     public ZoneDefinitionCollection Zones { get; }
     public ZoneEnvironmentCollection ZoneEnvironments { get; }
     public HouseDefinitionCollection Houses { get; }
+    public HousingFixtureDefinitionCollection HousingFixtures { get; }
     public ZoneNpcsCollection ZoneNpcs { get; }
     public MountDefinitionCollection Mounts { get; }
     public PetDefinitionCollection Pets { get; }
@@ -161,6 +163,7 @@ public class ResourceManager : IResourceManager, IDisposable
         Zones = new(_logger);
         ZoneEnvironments = new(_logger);
         Houses = new(_logger);
+        HousingFixtures = new(_logger);
         Mounts = new(_logger);
         Pets = new(_logger);
         Profiles = new(_logger);
@@ -348,6 +351,18 @@ public class ResourceManager : IResourceManager, IDisposable
         if (!Houses.Load(HousesFile))
             return false;
 
+        if (!HousingFixtures.Load(HousingFixturesFile))
+            return false;
+
+        foreach (var fixture in HousingFixtures.Values)
+        {
+            if (!ClientItemDefinitions.ContainsKey(fixture.ItemDefinitionId) || !Models.ContainsKey(fixture.ModelId))
+            {
+                _logger.LogError("Housing fixture {item} references an unknown item or model.", fixture.ItemDefinitionId);
+                return false;
+            }
+        }
+
         if (!Pets.Load(PetsFile))
             return false;
 
@@ -488,6 +503,8 @@ public class ResourceManager : IResourceManager, IDisposable
                 loaded = StoreBundleCategoryGroups.Load(StoreBundleCategoryGroupsFile);
             else if (e.FullPath == HousesFile)
                 loaded = Houses.Load(HousesFile);
+            else if (e.FullPath == HousingFixturesFile)
+                loaded = HousingFixtures.Load(HousingFixturesFile);
             else if (e.FullPath == PetsFile)
                 loaded = Pets.Load(PetsFile);
             else if (e.FullPath == MountsFile)

@@ -1,0 +1,27 @@
+[
+  {
+    "Comment": "Snowhill Lodge Chair",
+    "ItemDefinitionId": 27943,
+    "ModelId": 3895
+  },
+  {
+    "Comment": "Standard Large Bed",
+    "ItemDefinitionId": 36105,
+    "ModelId": 1820
+  },
+  {
+    "Comment": "Standard Bookcase",
+    "ItemDefinitionId": 36110,
+    "ModelId": 1825
+  },
+  {
+    "Comment": "Standard Wooden Dining Table",
+    "ItemDefinitionId": 36137,
+    "ModelId": 1765
+  },
+  {
+    "Comment": "Standard Floor Lamp",
+    "ItemDefinitionId": 36142,
+    "ModelId": 1846
+  }
+]
