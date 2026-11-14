@@ -17,6 +17,18 @@ Use `main` as the default pull request target. For changes specifically based on
 `main` in both RP work and upstream integration. Branch from the target you intend
 to change, and avoid bringing unrelated upstream merges into a feature PR.
 
+## Website and documentation work
+
+The website source lives in `site/`; its backend lives in `src/Sanctuary.WebAPI/`.
+Read [the website guide](site/README.md) before changing authentication, uploads,
+or collection review. A static preview does not validate those API features.
+For public-facing changes, keep the README, command reference, and
+[change history](CHANGELOG.md) aligned with the code being published.
+
+Follow [the publishing guide](docs/RELEASING.md) when preparing updates. Keep
+GitHub source publication separate from deployment to the hosted game server.
+Report vulnerabilities using [the private reporting process](SECURITY.md).
+
 ## Before submitting
 
 - Include a short explanation, reproduction steps or a concrete command example,
@@ -73,3 +85,8 @@ Therefore, as *general* guidelines:
 For project questions, open an issue in
 [Sanctuary-RP](https://github.com/amuralle/Sanctuary-RP/issues). Include enough
 context to distinguish an RP feature from shared emulator behavior.
+
+For community questions and session discussion, join
+[Free Realms Roleplay Community Hub](https://discord.gg/hrA85MU9Px).
+Keep reproducible bugs and feature proposals in GitHub issues; keep security
+reports private using the process in [SECURITY.md](SECURITY.md).

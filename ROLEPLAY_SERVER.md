@@ -5,6 +5,14 @@ companion toolkit. For the project's purpose, upstream relationship, and public
 branches, start with [the README](README.md). Features described here are source
 capabilities; the running hosted build may differ.
 
+## Project and community links
+
+- [Live roleplay toolkit](https://play.osfr-rp.com/guide/)
+- [Discord: Free Realms Roleplay Community Hub](https://discord.gg/hrA85MU9Px)
+- [Public source repository](https://github.com/amuralle/Sanctuary-RP)
+- [Website source and API guide](site/README.md)
+- [Publishing and update process](docs/RELEASING.md)
+
 ## Local Windows instance
 
 The local RP instance runs natively on Windows without Docker, WSL, or a persistent
