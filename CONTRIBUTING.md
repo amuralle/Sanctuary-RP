@@ -1,4 +1,35 @@
-# Contributing
+# Contributing to Sanctuary-RP
+
+This is the **OSFR-RP roleplay server**, maintained separately from
+[upstream Sanctuary](https://github.com/Open-Source-Free-Realms/Sanctuary).
+Please open RP issues and pull requests in
+[amuralle/Sanctuary-RP](https://github.com/amuralle/Sanctuary-RP).
+
+## Scope and branches
+
+RP commands, scene tools, the companion website, and RP instance scripts belong
+here. General emulator fixes may also be suitable for upstream; keep reusable
+fixes separate from RP-specific behavior and discuss cross-project changes first.
+Do not assume an RP feature is intended for the main OSFR server.
+
+Use `main` as the default pull request target. For changes specifically based on
+`roleplay/tabletop-controls`, target that branch and state why; it can differ from
+`main` in both RP work and upstream integration. Branch from the target you intend
+to change, and avoid bringing unrelated upstream merges into a feature PR.
+
+## Before submitting
+
+- Include a short explanation, reproduction steps or a concrete command example,
+  the branch and commit tested, and any user-visible behavior change.
+- Use the SDK in `src/global.json`. Run `dotnet build` from `src` and the tests
+  relevant to code changes. Database integration tests need a configured test
+  database; see `.github/workflows/build.yml` for the CI MariaDB setup. State any
+  checks you could not run.
+- For RP commands and website changes, describe in-game or browser checks
+  separately from automated tests. Update `README.md` or `ROLEPLAY_SERVER.md`
+  when setup, permissions, persistence, or command behavior changes.
+- Keep credentials, player data, databases, logs, and backups out of commits.
+
 Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are greatly appreciated.
 
 If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement". 
@@ -12,7 +43,7 @@ If you have a suggestion that would make this better, please fork the repo and c
 `git commit -m 'Add some AmazingFeature'`
 4) Push to the Branch \
 `git push origin feature/AmazingFeature`
-5) Open a Pull Request to `main`
+5) Open a Pull Request to `main`, or the RP development branch selected above
 
 ## Coding Values
 
@@ -39,4 +70,6 @@ Therefore, as *general* guidelines:
 - Use AI responsibly.
 
 ## Need Help?
-Feel free to ask any questions you have about our respository to our contributors! The best way to reach out is through our Discord. You are also welcome to ping a contributor on Github.
+For project questions, open an issue in
+[Sanctuary-RP](https://github.com/amuralle/Sanctuary-RP/issues). Include enough
+context to distinguish an RP feature from shared emulator behavior.
