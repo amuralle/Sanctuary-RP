@@ -431,3 +431,7 @@ FodyWeavers.xsd
 # Ignore JetBrains Rider/ReSharper temporary files
 .idea/
 *.sln.iml
+# RP website/runtime state: source and public site/data catalog files stay tracked.
+**/Data/DataProtection/
+**/Data/ModelCatalog/
+**/Data/CollectionVolunteers/
