@@ -2,7 +2,7 @@
 
 **A roleplay and virtual tabletop server for Free Realms, built on Sanctuary.**
 
-[Project website and toolkit](https://www.osfr-rp.com) | [Server setup and command reference](ROLEPLAY_SERVER.md) | [Report an RP issue](https://github.com/amuralle/Sanctuary-RP/issues) | [Contribute](CONTRIBUTING.md)
+[Website and toolkit](https://play.osfr-rp.com/guide/) | [Join our Discord](https://discord.gg/hrA85MU9Px) | [Setup and commands](ROLEPLAY_SERVER.md) | [Updates](CHANGELOG.md) | [Contribute](CONTRIBUTING.md)
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
@@ -19,6 +19,22 @@ repository develops the RP experience and integrates upstream changes separately
 RP features and hosting decisions here are maintained separately from the main
 OSFR server. Shared fixes can be proposed upstream without making RP-specific
 behavior part of the main project.
+
+## Start here
+
+| You want to... | Go to... |
+| --- | --- |
+| Join the community, ask about joining a session, or discuss RP ideas | [Free Realms Roleplay Community Hub on Discord](https://discord.gg/hrA85MU9Px) |
+| Browse models, prepare scene commands, or use the Collection Map | [The live roleplay toolkit](https://play.osfr-rp.com/guide/) |
+| Learn miniature and DM commands, permissions, or persistence | [RP server reference](ROLEPLAY_SERVER.md#tabletop-miniatures) |
+| Run an instance you control | [Build instructions below](#build-from-source) and [instance setup](ROLEPLAY_SERVER.md) |
+| Work on the website or API | [Website source guide](site/README.md) and [contribution guide](CONTRIBUTING.md) |
+| Follow published changes or prepare an update | [Change history](CHANGELOG.md) and [publishing guide](docs/RELEASING.md) |
+| Report a security concern privately | [Security policy](SECURITY.md) |
+
+The Discord invite is for the community; joining it does not create a game
+account. The toolkit uses an existing game account for contributions. Ask in the
+community about current sessions and connection instructions.
 
 ## What makes it different
 
@@ -59,7 +75,8 @@ below.
 
 ## Playing and running a server
 
-For the hosted RP project, start at [osfr-rp.com](https://www.osfr-rp.com).
+For the hosted RP project, start at [the toolkit](https://play.osfr-rp.com/guide/)
+and [our Discord community](https://discord.gg/hrA85MU9Px).
 This repository provides server software and the web toolkit. A compatible
 Free Realms client and launcher are also needed to play; see the
 [OSFR Launcher project](https://github.com/Open-Source-Free-Realms/Launcher).
@@ -101,6 +118,41 @@ That guide also covers refreshing builds, stopping the instance, and backups.
 
 For Linux hosting, read [the VPS deployment notes](ROLEPLAY_SERVER.md#linux-vps)
 and review the deployment scripts and host settings before running them.
+
+## Website and source code
+
+The website is part of this repository. Its public frontend and the API that
+supports it can be developed together; a separate website repository is not
+required.
+
+| Area | Source |
+| --- | --- |
+| Website layout, behavior, styling, and public catalog data | [`site/`](site/) |
+| Website development and preview instructions | [`site/README.md`](site/README.md) |
+| Login, image contributions, collection review, and public statistics API | [`src/Sanctuary.WebAPI/`](src/Sanctuary.WebAPI/) |
+| Shared collection survey storage and review rules | [`src/Sanctuary.Core/CollectionVolunteers/`](src/Sanctuary.Core/CollectionVolunteers/) |
+| In-game scene, DM, and survey commands | [`src/Sanctuary.Game/ChatCommands/`](src/Sanctuary.Game/ChatCommands/) |
+| Offline model catalog and field-guide generation | [`scripts/roleplay-model-guide/`](scripts/roleplay-model-guide/) |
+| Windows instance and Linux deployment scripts | [`scripts/roleplay/`](scripts/roleplay/) and [`scripts/roleplay-vps/`](scripts/roleplay-vps/) |
+
+The repository contains reusable source and public catalog assets. Production
+credentials, SSH keys, player databases, website sessions, upload attribution
+stores, and backups belong outside Git. Publishing source does not grant access
+to the running host or its data. See the [website guide](site/README.md) for the
+boundary between static files and server-backed features.
+
+## Community, updates, and support
+
+Join [Free Realms Roleplay Community Hub](https://discord.gg/hrA85MU9Px) for
+community discussion, session coordination, and questions. Use
+[GitHub issues](https://github.com/amuralle/Sanctuary-RP/issues) for reproducible
+bugs and scoped feature proposals so the work can be tracked.
+
+Published documentation changes are recorded in [CHANGELOG.md](CHANGELOG.md).
+The [commit history](https://github.com/amuralle/Sanctuary-RP/commits/main/) shows
+source updates; it is not a record of what is currently deployed. Version tags
+and release notes should identify their exact commit and any migration or
+configuration requirements; see [the publishing guide](docs/RELEASING.md).
 
 ## Contributing and reporting problems
 

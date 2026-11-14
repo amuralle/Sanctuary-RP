@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Community and session questions
+    url: https://discord.gg/hrA85MU9Px
+    about: Join the Free Realms Roleplay Community Hub for community discussion and session questions.
+  - name: Report a security vulnerability privately
+    url: https://github.com/amuralle/Sanctuary-RP/security/advisories/new
+    about: Send security details privately instead of opening a public issue.
