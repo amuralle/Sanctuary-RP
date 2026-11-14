@@ -1,265 +1,121 @@
+# OSFR-RP / Sanctuary-RP
 
-<a id="readme-top"></a>
-<!-- PROJECT SHIELDS -->
-<!--
-*** I'm using markdown "reference style" links for readability.
-*** Reference links are enclosed in brackets [ ] instead of parentheses ( ).
-*** See the bottom of this document for the declaration of the reference variables
-*** for contributors-url, forks-url, etc. This is an optional, concise syntax you may use.
-*** https://www.markdownguide.org/basic-syntax/#reference-style-links
--->
-[![Contributors][contributors-shield]][contributors-url]
-[![Forks][forks-shield]][forks-url]
-[![Stargazers][stars-shield]][stars-url]
-[![Issues][issues-shield]][issues-url]
-[![MIT License][license-shield]][license-url]
+**A roleplay and virtual tabletop server for Free Realms, built on Sanctuary.**
 
+[Project website and toolkit](https://www.osfr-rp.com) | [Server setup and command reference](ROLEPLAY_SERVER.md) | [Report an RP issue](https://github.com/amuralle/Sanctuary-RP/issues) | [Contribute](CONTRIBUTING.md)
 
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
-<!-- PROJECT LOGO -->
-<br />
-<div align="center">
-  <a href="https://github.com/Open-Source-Free-Realms/Sanctuary">
-    <img src="images/logo.png" alt="Logo" width="137" height="80">
-  </a>
+## What this project is
 
-<h3 align="center">Sanctuary</h3>
+OSFR-RP uses the Free Realms world as a shared space for roleplay, player-created
+scenes, and DM-led sessions. Sanctuary-RP contains the C# server, RP commands,
+companion web toolkit, and scripts for running your own instance.
 
-  <p align="center">
-    Sanctuary is an open source server emulator for Free Realms built from scratch written in C#.
-    <br />
-    <a href="https://github.com/Open-Source-Free-Realms/Sanctuary/wiki"><strong>Explore the docs »</strong></a>
-    <br />
-    <br />
-    <a href="https://github.com/Open-Source-Free-Realms/Sanctuary">View Demo</a>
-    ·
-    <a href="https://github.com/Open-Source-Free-Realms/Sanctuary/issues/new?labels=bug&template=bug-report---.md">Report Bug</a>
-    ·
-    <a href="https://github.com/Open-Source-Free-Realms/Sanctuary/issues/new?labels=enhancement&template=feature-request---.md">Request Feature</a>
-  </p>
-</div>
+It is an independently maintained derivative of
+[Open Source Free Realms' Sanctuary](https://github.com/Open-Source-Free-Realms/Sanctuary).
+The upstream project develops the general Free Realms server emulator; this
+repository develops the RP experience and integrates upstream changes separately.
+RP features and hosting decisions here are maintained separately from the main
+OSFR server. Shared fixes can be proposed upstream without making RP-specific
+behavior part of the main project.
 
+## What makes it different
 
+- **Shared scene miniatures:** spawn NPC models, name and group them, move them,
+  play emotes, inspect their IDs, and clear a scene with `!mini` commands.
+- **DM presentation controls:** administrators can temporarily change their model
+  or become invisible to other players with `!dm` commands.
+- **A companion roleplay toolkit:** browse and search client models, prepare spawn
+  commands, consult the command reference, and contribute model preview images
+  using a game account. The website source is in [`site/`](site/).
+- **Community collection surveying:** players can submit positions with
+  `!volunteer`, then review them on the toolkit's Collection Map. Accepting a
+  submission records review status; it does not automatically change live nodes
+  or upstream resources.
+- **Separate instance tooling:** native Windows scripts and a Linux VPS deployment
+  path keep server data, credentials, and backups outside the source checkout.
 
-<!-- TABLE OF CONTENTS -->
-<details>
-  <summary>Table of Contents</summary>
-  <ol>
-    <li>
-      <a href="#about-the-project">About The Project</a>
-      <ul>
-        <li><a href="#built-with">Built With</a></li>
-      </ul>
-    </li>
-    <li>
-      <a href="#getting-started">Getting Started</a>
-      <ul>
-        <li><a href="#prerequisites">Prerequisites</a></li>
-        <li><a href="#installation">Installation</a></li>
-      </ul>
-    </li>
-    <li><a href="#usage">Usage</a></li>
-    <li><a href="#roadmap">Roadmap</a></li>
-    <li><a href="#contributing">Contributing</a></li>
-    <li><a href="#license">License</a></li>
-    <li><a href="#contact">Contact</a></li>
-    <li><a href="#acknowledgments">Acknowledgments</a></li>
-  </ol>
-</details>
+Miniatures and DM presentation changes are session-only. Miniatures disappear
+when their zone restarts; the scene tools are not a persistent campaign save
+system. See [the RP reference](ROLEPLAY_SERVER.md) for commands and permissions.
 
+## Project status and branches
 
+This is an actively developed server emulator and RP toolkit. Features can be
+incomplete, and source availability does not imply that every Free Realms system
+is implemented or that the hosted server is currently online.
 
-<!-- ABOUT THE PROJECT -->
-## About The Project
+| Branch | Purpose |
+| --- | --- |
+| [`main`](https://github.com/amuralle/Sanctuary-RP/tree/main) | Default public RP source, including upstream integrations. Start here. |
+| [`roleplay/tabletop-controls`](https://github.com/amuralle/Sanctuary-RP/tree/roleplay/tabletop-controls) | Separate RP/tabletop development line; its upstream base and feature set can differ from `main`. |
 
-[![Product Name Screen Shot][product-screenshot]](https://github.com/Open-Source-Free-Realms/Sanctuary)
+Both branches are public. Local experiments and uncommitted work are not included
+until explicitly committed and pushed. The hosted instance may run a separately
+published build; this README does not assert which commit is deployed. There are
+currently no packaged GitHub releases; build from source using the instructions
+below.
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+## Playing and running a server
 
+For the hosted RP project, start at [osfr-rp.com](https://www.osfr-rp.com).
+This repository provides server software and the web toolkit. A compatible
+Free Realms client and launcher are also needed to play; see the
+[OSFR Launcher project](https://github.com/Open-Source-Free-Realms/Launcher).
 
+### Build from source
 
-### Built With
+Install Git and the .NET SDK requested by [`src/global.json`](src/global.json)
+on your chosen branch. SDK requirements can differ between branches; use an
+editor or IDE that supports that SDK.
 
-* [![CSharp][CSharp]][CSharp-url]
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
-
-<!-- GETTING STARTED -->
-## Getting Started
-
-This repository only contains the **server emulator** for Free Realms. To play the game, you must also have a **Free Realms client**. You can download the client using the **OSFR Launcher** available here: [OSFR Launcher](https://github.com/Open-Source-Free-Realms/Launcher).
-
-### Prerequisites
-
-Before you can use this software, ensure you have the following installed:
-
-- **Visual Studio 2022**  
-  Make sure to include the **.NET Framework development workload** during installation.
-
-### Release
-
-1. Clone the repo
-   ```sh
-   git clone https://github.com/Open-Source-Free-Realms/Sanctuary.git
-   ```
-2. Build the solution for `Sanctuary.Core` for `Release`
-3. Create a file named `database.json` in the `Release` folder located within the new `bin` folder
-4. Paste the following
-   ```json
-    {
-    "Database": {
-        "Provider": "Sqlite",
-        "ConnectionString": "Data Source=D:\\Games\\Free Realms\\sanctuary.db;"
-    }
-   ```
-5. Launch `Sanctuary.Login`, `Sanctuary.Gateway`
-6. Connect to the client
-
-**_IMPORTANT:_** Update the Data Source file path (D:\\Games\\Free Realms\\sanctuary.db) to match the location where your database files are stored.
-
-**_NOTE:_** The following user should already exist, but if not then implement one with the following credentials:
-
-```sh
-1	admin	admin	EXmdPd5dbAcs58vZ0iCcPRtJkGdMePL2	10	0	1	1	2024-06-22 13:51:13.2736902+01:00	2024-07-14 01:57:45.8765645+00:00
+```powershell
+git clone https://github.com/amuralle/Sanctuary-RP.git
+cd Sanctuary-RP
+cd src
+dotnet restore
+dotnet build --configuration Release
 ```
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+Building the solution does not configure or start an instance. The server uses
+separate Login, Gateway, and WebAPI services, plus a database. The RP Windows
+scripts provision MariaDB; the underlying emulator also supports SQLite. See
+[database configuration](src/Sanctuary.Database/README.md) for provider details.
 
-### Debug
+### Local Windows RP instance
 
-1. Clone the repo
-   ```sh
-   git clone https://github.com/Open-Source-Free-Realms/Sanctuary.git
-   ```
-2. Build the solution for `Sanctuary.Core` for `Debug`
-3. Right-Click **'Manage User Secrets'** for the following projects:
-   - `Sanctuary.Gateway`
-   - `Sanctuary.Login`
-   - `Sanctuary.Database`
+From the repository root, use the native PowerShell scripts:
 
-4. Copy and paste the following configuration for **SQLite** into the secrets editor:
+```powershell
+.\scripts\roleplay\Initialize-RoleplayServer.ps1
+.\scripts\roleplay\Start-RoleplayServer.ps1
+.\scripts\roleplay\Get-RoleplayServerStatus.ps1
+```
 
-   ```json
-   {
-     "Database": {
-       "Provider": "Sqlite",
-       "ConnectionString": "Data Source=D:\\Games\\Free Realms\\sanctuary.db;"
-     }
-   }
-5. Launch `Sanctuary.Login`, `Sanctuary.Gateway`
-6. Connect to the client
+Initialization downloads and verifies portable MariaDB, builds the server, and
+creates a separate instance under `Documents/FreeRealms-Instances/roleplay` by
+default. Local services bind to localhost. To connect a client, configure the
+launcher as described in [the setup guide](ROLEPLAY_SERVER.md#local-windows-instance).
+That guide also covers refreshing builds, stopping the instance, and backups.
 
-**_IMPORTANT:_** Update the Data Source file path (D:\\Games\\Free Realms\\sanctuary.db) to match the location where your database files are stored.
+For Linux hosting, read [the VPS deployment notes](ROLEPLAY_SERVER.md#linux-vps)
+and review the deployment scripts and host settings before running them.
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+## Contributing and reporting problems
 
-### Docker Compose
+Open RP bugs and feature requests in
+[Sanctuary-RP issues](https://github.com/amuralle/Sanctuary-RP/issues), and target
+pull requests at this repository. Include the branch, commit, reproduction steps,
+and relevant commands. See [CONTRIBUTING.md](CONTRIBUTING.md) for branch selection
+and validation guidance. Upstream's wiki can provide emulator background, but the
+RP setup and command reference are maintained here.
 
-1. Clone the repo
-   ```sh
-   git clone https://github.com/Open-Source-Free-Realms/Sanctuary.git
-   ```
-2. Launch `Docker Compose`
-3. Connect to the client
+## License and credits
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-<!-- USAGE EXAMPLES -->
-## Usage
-
-To spawn an npc ```/npc spawn <NameId> <ModelId> [TextureAlias]``` TextureAlias is optional
-
-_For more examples, please refer to the [Documentation](https://github.com/Open-Source-Free-Realms/Sanctuary/wiki)_
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
-
-<!-- ROADMAP -->
-## Roadmap
-
-- [ ] Feature 1
-- [ ] Feature 2
-- [ ] Feature 3
-    - [ ] Nested Feature
-
-See the [open issues](https://github.com/Open-Source-Free-Realms/Sanctuary/issues) for a full list of proposed features (and known issues).
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
-
-<!-- CONTRIBUTING -->
-## Contributing
-
-Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
-
-If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
-Don't forget to give the project a star! Thanks again!
-
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-### Top contributors:
-
-<a href="https://github.com/Open-Source-Free-Realms/Sanctuary/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=Open-Source-Free-Realms/Sanctuary" alt="contrib.rocks image" />
-</a>
-
-
-
-<!-- LICENSE -->
-<!-- ## License
-
-Distributed under the MIT License. See `LICENSE.txt` for more information.
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p> -->
-
-
-
-<!-- CONTACT -->
-<!-- ## Contact
-
-Your Name - [@twitter_handle](https://twitter.com/twitter_handle) - email@email_client.com
-
-Project Link: [https://github.com/Open-Source-Free-Realms/Sanctuary](https://github.com/Open-Source-Free-Realms/Sanctuary)
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p> -->
-
-
-
-<!-- ACKNOWLEDGMENTS -->
-## Acknowledgments
-
-* []()
-* []()
-* []()
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
-
-<!-- MARKDOWN LINKS & IMAGES -->
-<!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
-[contributors-shield]: https://img.shields.io/github/contributors/Open-Source-Free-Realms/Sanctuary.svg?style=for-the-badge
-[contributors-url]: https://github.com/Open-Source-Free-Realms/Sanctuary/graphs/contributors
-[forks-shield]: https://img.shields.io/github/forks/Open-Source-Free-Realms/Sanctuary.svg?style=for-the-badge
-[forks-url]: https://github.com/Open-Source-Free-Realms/Sanctuary/network/members
-[stars-shield]: https://img.shields.io/github/stars/Open-Source-Free-Realms/Sanctuary.svg?style=for-the-badge
-[stars-url]: https://github.com/Open-Source-Free-Realms/Sanctuary/stargazers
-[issues-shield]: https://img.shields.io/github/issues/Open-Source-Free-Realms/Sanctuary.svg?style=for-the-badge
-[issues-url]: https://github.com/Open-Source-Free-Realms/Sanctuary/issues
-[license-shield]: https://img.shields.io/github/license/Open-Source-Free-Realms/Sanctuary.svg?style=for-the-badge
-[license-url]: https://github.com/Open-Source-Free-Realms/Sanctuary/blob/master/LICENSE.txt
-[linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
-[linkedin-url]: https://linkedin.com/in/linkedin_username
-[product-screenshot]: images/screenshot.jpg
-[CSharp]: https://img.shields.io/badge/csharp-000000?style=for-the-badge&logo=csharp&logoColor=white
-[CSharp-url]: https://dotnet.microsoft.com/en-us/languages/csharp
+See [LICENSE](LICENSE) for the GNU Affero General Public License, version 3.
+Sanctuary-RP builds on the work of the
+[Sanctuary contributors](https://github.com/Open-Source-Free-Realms/Sanctuary/graphs/contributors)
+and the broader Open Source Free Realms community. Upstream history and license
+are retained. Free Realms is the original game on which this emulator is based;
+this repository is a community project.

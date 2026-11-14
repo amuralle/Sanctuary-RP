@@ -1,7 +1,16 @@
-# Roleplay Server
+# OSFR-RP server setup and command reference
 
-This branch keeps the roleplay server independent from archaeology development. It
-runs natively on Windows without Docker, WSL, or a persistent Windows service.
+This guide covers the Sanctuary-RP instance scripts, tabletop commands, and
+companion toolkit. For the project's purpose, upstream relationship, and public
+branches, start with [the README](README.md). Features described here are source
+capabilities; the running hosted build may differ.
+
+## Local Windows instance
+
+The local RP instance runs natively on Windows without Docker, WSL, or a persistent
+Windows service. Install Git and the .NET SDK specified by
+[`src/global.json`](src/global.json), clone
+`https://github.com/amuralle/Sanctuary-RP.git`, and run commands from that checkout.
 
 MariaDB data, credentials, published server binaries, logs, portraits, and backups
 live outside the repository under
@@ -10,7 +19,16 @@ outside OneDrive or another live file-sync client.
 
 ## Commands
 
-Run these from PowerShell:
+Run these from PowerShell at the repository root. Initialization downloads
+portable MariaDB and publishes the services; start and stop control that separate
+local instance.
+
+The optional launcher configuration command requires an existing compatible
+client installation and OSFR Launcher settings. Close the launcher first. By
+default it reuses the client path from an entry named `Local Sanctuary` and adds
+an entry named `Athropex Roleplay Local`. If your source entry has another name,
+pass `-ClientSourceName 'Your existing entry'` to
+`Configure-RoleplayLauncher.ps1`.
 
 ```powershell
 .\scripts\roleplay\Initialize-RoleplayServer.ps1
@@ -40,9 +58,12 @@ security, and restore testing are complete.
 
 ## Linux VPS
 
-The VPS deployment remains separate from the local Windows runtime. It publishes
-self-contained `linux-x64` services, installs them as systemd units, keeps MariaDB
-and WebAPI on loopback, and exposes the web edge plus the two public UDP game ports.
+The VPS deployment remains separate from the local Windows runtime. Review
+`Deploy-RoleplayVps.ps1` parameters and the remote installer before deploying;
+the command below publishes services and changes the target host configuration.
+
+It publishes self-contained `linux-x64` services, installs them as systemd units,
+keeps MariaDB and WebAPI on loopback, and exposes the web edge plus the two public UDP game ports.
 
 From PowerShell:
 
