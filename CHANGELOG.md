@@ -16,6 +16,8 @@ complete source history and [the publishing guide](docs/RELEASING.md) for releas
   public contribution data, authentication boundaries, and publishing practices.
 - Added this change history, a publishing guide, and a security policy with private
   GitHub vulnerability reporting enabled.
+- Excluded the default website authentication-key, upload, and survey runtime
+  stores from Git tracking to reduce accidental publication.
 - Added website navigation to the Discord community, source repository, project
   documentation, and update history.
 - Updated the contribution guide and RP issue templates, corrected the license
