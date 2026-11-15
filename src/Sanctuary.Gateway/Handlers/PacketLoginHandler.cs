@@ -94,6 +94,8 @@ public static class PacketLoginHandler
                 .ThenInclude(x => x.IgnoreCharacter)
             .Include(x => x.Profiles)
                 .ThenInclude(x => x.Items)
+            .Include(x => x.Quests)
+                .ThenInclude(x => x.Progress)
             .Include(x => x.GuildMember!)
                 .ThenInclude(x => x.Guild)
                     .ThenInclude(x => x.Members)
@@ -199,7 +201,8 @@ public static class PacketLoginHandler
             .Where(x => x.Id == character.Id)
             .ExecuteUpdate(x => x.SetProperty(x => x.LastLogin, connection.Player.LoginStartedAt));
 
-        _loginClient.SendCharacterLogin(character.Id);
+        connection.BeginLoginSession();
+        _loginClient.SendCharacterLogin(character.Id, connection.LoginSession);
 
         packetLoginReply.Success = true;
 

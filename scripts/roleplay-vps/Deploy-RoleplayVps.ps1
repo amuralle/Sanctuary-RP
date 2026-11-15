@@ -4,7 +4,10 @@ param(
     [string] $WebsiteDomain = 'www.osfr-rp.com',
     [string] $ClientRoot = "$env:LOCALAPPDATA\OSFRLauncher\Servers\OSFR Public Server\Client",
     [switch] $SkipClientUpload,
-    [switch] $RefreshClient
+    [switch] $RefreshClient,
+    [switch] $ExistingServer,
+    [switch] $StageOnly,
+    [string] $MigrationSql
 )
 
 Set-StrictMode -Version Latest
@@ -19,6 +22,9 @@ if ($WebsiteDomain -notmatch '^[a-zA-Z0-9.-]+$') {
 }
 
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+if ($ExistingServer -and (-not $SkipClientUpload -or -not (Test-Path -LiteralPath $MigrationSql -PathType Leaf))) {
+    throw 'Existing-server updates require -SkipClientUpload and a rehearsed -MigrationSql file.'
+}
 $revision = (& git -C $repositoryRoot rev-parse --short HEAD).Trim()
 
 if (& git -C $repositoryRoot status --porcelain) {
@@ -101,19 +107,33 @@ try {
     }
 
     $remoteArchive = "/tmp/$releaseId.tar"
-    $remoteInstaller = "/tmp/Install-RoleplayRelease.sh"
+    $installerName = if ($ExistingServer) { 'Update-RoleplayRelease.sh' } else { 'Install-RoleplayRelease.sh' }
+    $remoteInstaller = "/tmp/$installerName"
 
     & scp $releaseArchive "${SshHost}:$remoteArchive"
     if ($LASTEXITCODE -ne 0) {
         throw 'Uploading the release archive failed.'
     }
 
-    & scp (Join-Path $PSScriptRoot 'Install-RoleplayRelease.sh') "${SshHost}:$remoteInstaller"
+    & scp (Join-Path $PSScriptRoot $installerName) "${SshHost}:$remoteInstaller"
     if ($LASTEXITCODE -ne 0) {
         throw 'Uploading the release installer failed.'
     }
 
-    & ssh $SshHost "chmod 700 '$remoteInstaller' && sudo '$remoteInstaller' '$remoteArchive' '$releaseId' '$Domain' '$WebsiteDomain'"
+    if ($ExistingServer) {
+        & scp $MigrationSql "${SshHost}:/tmp/rp-housing-migrations.sql"
+        if ($LASTEXITCODE -ne 0) { throw 'Uploading migrations failed.' }
+        & scp (Join-Path $PSScriptRoot 'Recognize-LegacyCollectionMigration.sql') "${SshHost}:/tmp/rp-housing-legacy.sql"
+        if ($LASTEXITCODE -ne 0) { throw 'Uploading the legacy schema preflight failed.' }
+        if ($StageOnly) {
+            Write-Host "Staged $releaseId at $remoteArchive without restarting the server."
+            return
+        }
+        & ssh $SshHost "sudo bash '$remoteInstaller' '$remoteArchive' '$releaseId' /tmp/rp-housing-migrations.sql /tmp/rp-housing-legacy.sql"
+    }
+    else {
+        & ssh $SshHost "sudo bash '$remoteInstaller' '$remoteArchive' '$releaseId' '$Domain' '$WebsiteDomain'"
+    }
     if ($LASTEXITCODE -ne 0) {
         throw 'Installing the release failed.'
     }

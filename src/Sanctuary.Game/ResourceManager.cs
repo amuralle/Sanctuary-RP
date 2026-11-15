@@ -5,6 +5,7 @@ using System.Linq;
 using Microsoft.Extensions.Logging;
 
 using Sanctuary.Game.Resources;
+using Sanctuary.Game.Resources.Definitions.QuestGoals;
 using Sanctuary.Game.Resources.Definitions.Rewards;
 
 namespace Sanctuary.Game;
@@ -37,6 +38,7 @@ public class ResourceManager : IResourceManager, IDisposable
     public static readonly string EquipmentSlotDefinitionsFile = Path.Combine(BaseDirectory, "EquipmentSlotDefinitions.txt");
     public static readonly string ItemCategoriesFile = Path.Combine(BaseDirectory, "ItemCategories.txt");
     public static readonly string ItemCategoryGroupsFile = Path.Combine(BaseDirectory, "ItemCategoryGroups.txt");
+    public static readonly string TintGroupMappingsFile = Path.Combine(BaseDirectory, "TintGroupMappings.txt");
 
     public static readonly string StoresFile = Path.Combine(BaseDirectory, "Stores.json");
     public static readonly string StoreBundlesFile = Path.Combine(BaseDirectory, "StoreBundles.json");
@@ -45,7 +47,10 @@ public class ResourceManager : IResourceManager, IDisposable
     public static readonly string StoreBundleCategoryGroupsFile = Path.Combine(BaseDirectory, "StoreBundleCategoryGroups.json");
 
     public static readonly string ZonesDirectory = Path.Combine(BaseDirectory, "Zones");
+    public static readonly string ZoneEnvironmentsDirectory = Path.Combine(ZonesDirectory, "Environments");
+    public static readonly string ZoneNpcsDirectory = Path.Combine(ZonesDirectory, "Npcs");
     public static readonly string HousesFile = Path.Combine(BaseDirectory, "Houses.json");
+    public static readonly string HousingFixturesFile = Path.Combine(BaseDirectory, "HousingFixtures.json");
     public static readonly string PetsFile = Path.Combine(BaseDirectory, "Pets.json");
     public static readonly string MountsFile = Path.Combine(BaseDirectory, "Mounts.json");
     public static readonly string ProfilesFile = Path.Combine(BaseDirectory, "Profiles.json");
@@ -57,8 +62,7 @@ public class ResourceManager : IResourceManager, IDisposable
     public static readonly string NpcMovementsFile = Path.Combine(BaseDirectory, "NpcMovements.json");
     public static readonly string NpcAmbientFile = Path.Combine(BaseDirectory, "NpcAmbient.json");
     public static readonly string NameFilterFile = Path.Combine(BaseDirectory, "NameFilter.txt");
-    public static readonly string MapsDirectory = Path.Combine(BaseDirectory, "Maps");
-    public static readonly string TerrainDirectory = Path.Combine(BaseDirectory, "Terrain");
+    public static readonly string QuestsFile = Path.Combine(BaseDirectory, "Quests.json");
     public static readonly string NavMeshDirectory = Path.Combine(BaseDirectory, "NavMeshes");
     public static readonly string RewardTablesFile = Path.Combine(BaseDirectory, "Rewards.json");
     public static readonly string CombatAbilitiesFile = Path.Combine(BaseDirectory, "CombatAbilities.json");
@@ -85,6 +89,7 @@ public class ResourceManager : IResourceManager, IDisposable
     public EquipmentSlotDefinitionCollection EquipmentSlots { get; }
     public ItemCategoryDefinitionCollection ItemCategories { get; }
     public ItemCategoryGroupDefinitionCollection ItemCategoryGroups { get; }
+    public TintGroupCollection TintGroups { get; }
 
     public StoreDefinitionCollection Stores { get; }
     public StoreBundleGroupDefinitionCollection StoreBundleGroups { get; }
@@ -92,7 +97,10 @@ public class ResourceManager : IResourceManager, IDisposable
     public StoreBundleCategoryGroupDefinitionCollection StoreBundleCategoryGroups { get; }
 
     public ZoneDefinitionCollection Zones { get; }
+    public ZoneEnvironmentCollection ZoneEnvironments { get; }
     public HouseDefinitionCollection Houses { get; }
+    public HousingFixtureDefinitionCollection HousingFixtures { get; }
+    public ZoneNpcsCollection ZoneNpcs { get; }
     public MountDefinitionCollection Mounts { get; }
     public PetDefinitionCollection Pets { get; }
     public PlayerTitleCollection PlayerTitles { get; }
@@ -104,8 +112,7 @@ public class ResourceManager : IResourceManager, IDisposable
     public NameFilterCollection NameFilter { get; }
     public NpcMovementDefinitionCollection NpcMovements { get; }
     public NpcAmbientDefinitionCollection NpcAmbient { get; }
-    public MapGraphCollection Maps { get; }
-    public TerrainCollection Terrains { get; }
+    public QuestDefinitionCollection Quests { get; }
     public NavMeshCollection NavMeshes { get; }
 
     public RewardTableDefinitionCollection RewardTables { get; }
@@ -145,6 +152,7 @@ public class ResourceManager : IResourceManager, IDisposable
         EquipmentSlots = new(_logger);
         ItemCategories = new(_logger);
         ItemCategoryGroups = new(_logger);
+        TintGroups = new(_logger);
 
         Stores = new(_logger);
         StoreBundleGroups = new(_logger);
@@ -152,7 +160,9 @@ public class ResourceManager : IResourceManager, IDisposable
         StoreBundleCategoryGroups = new(_logger);
 
         Zones = new(_logger);
+        ZoneEnvironments = new(_logger);
         Houses = new(_logger);
+        HousingFixtures = new(_logger);
         Mounts = new(_logger);
         Pets = new(_logger);
         Profiles = new(_logger);
@@ -161,11 +171,11 @@ public class ResourceManager : IResourceManager, IDisposable
         PointOfInterests = new(_logger);
         Consumables = new(_logger);
         Npcs = new(_logger);
+        ZoneNpcs = new(_logger);
         NameFilter = new(_logger);
         NpcMovements = new(_logger);
         NpcAmbient = new(_logger);
-        Maps = new(_logger);
-        Terrains = new(_logger);
+        Quests = new(_logger);
         NavMeshes = new(_logger);
         RewardTables = new(_logger);
         CombatAbilities = new(_logger);
@@ -299,6 +309,9 @@ public class ResourceManager : IResourceManager, IDisposable
         if (!ItemCategoryGroups.Load(ItemCategoryGroupsFile))
             return false;
 
+        if (!TintGroups.Load(TintGroupMappingsFile))
+            return false;
+            
         if (!Stores.Load(StoresFile) || !Stores.LoadBundles(StoreBundlesFile))
             return false;
 
@@ -309,6 +322,9 @@ public class ResourceManager : IResourceManager, IDisposable
             return false;
 
         if (!StoreBundleCategoryGroups.Load(StoreBundleCategoryGroupsFile))
+            return false;
+
+        if (!ZoneEnvironments.Load(ZoneEnvironmentsDirectory))
             return false;
 
         if (!Zones.Load(ZonesDirectory))
@@ -325,6 +341,9 @@ public class ResourceManager : IResourceManager, IDisposable
         }
 
         if (!Houses.Load(HousesFile))
+            return false;
+
+        if (!LoadHousingFixtures(HousingFixturesFile))
             return false;
 
         if (!Pets.Load(PetsFile))
@@ -351,11 +370,32 @@ public class ResourceManager : IResourceManager, IDisposable
         if (!Npcs.Load(NpcsFile))
             return false;
 
+        if (!ZoneNpcs.Load(ZoneNpcsDirectory) || !ZoneNpcs.AddDefinitionsTo(Npcs))
+            return false;
+
         if (!NpcMovements.Load(NpcMovementsFile))
             return false;
 
         if (!NpcAmbient.Load(NpcAmbientFile))
             return false;
+
+        if (!Quests.Load(QuestsFile))
+            return false;
+
+        var playerSpecificNodeTypes = CollectionNodePools.Values
+            .Where(pool => pool.PlayerSpecific)
+            .Select(pool => pool.NodeType)
+            .ToHashSet();
+
+        foreach (var quest in Quests.Quests.Values)
+        {
+            foreach (var collectGoal in quest.Goals.OfType<CollectGoal>())
+            {
+                if (!string.IsNullOrEmpty(collectGoal.CollectNodeType) && !playerSpecificNodeTypes.Contains(collectGoal.CollectNodeType))
+                    _logger.LogWarning("Collect goal on quest {id} uses node type {type}, which has no player-specific pool; it can never be credited.",
+                        quest.QuestId, collectGoal.CollectNodeType);
+            }
+        }
 
         foreach (var coin in CollectionCoins.Values)
         {
@@ -376,18 +416,13 @@ public class ResourceManager : IResourceManager, IDisposable
         return true;
     }
 
-    public bool LoadZoneGeometry()
-    {
-        if (!Maps.Load(MapsDirectory))
-            return false;
+    public bool LoadNavMeshes() => NavMeshes.Load(NavMeshDirectory);
 
-        if (!Terrains.Load(TerrainDirectory))
-            return false;
-
-        if (!NavMeshes.Load(NavMeshDirectory))
-            return false;
-        return true;
-    }
+    public bool LoadHousingFixtures(string filePath) => HousingFixtures.Load(filePath, fixture =>
+        ClientItemDefinitions.TryGetValue(fixture.ItemDefinitionId, out var item) && item.Type == 29
+        && !string.IsNullOrWhiteSpace(item.ModelName)
+        && Models.TryGetValue(fixture.ModelId, out var model)
+        && string.Equals(item.ModelName, model.ModelFileName, StringComparison.OrdinalIgnoreCase));
 
     private void _fileSystemWatcher_Changed(object sender, FileSystemEventArgs e)
     {
@@ -457,6 +492,8 @@ public class ResourceManager : IResourceManager, IDisposable
                 loaded = StoreBundleCategoryGroups.Load(StoreBundleCategoryGroupsFile);
             else if (e.FullPath == HousesFile)
                 loaded = Houses.Load(HousesFile);
+            else if (e.FullPath == HousingFixturesFile)
+                loaded = LoadHousingFixtures(HousingFixturesFile);
             else if (e.FullPath == PetsFile)
                 loaded = Pets.Load(PetsFile);
             else if (e.FullPath == MountsFile)
@@ -470,7 +507,7 @@ public class ResourceManager : IResourceManager, IDisposable
             else if (e.FullPath == PointOfInterestsFile)
                 loaded = PointOfInterests.Load(PointOfInterestsFile);
             else if (e.FullPath == NpcsFile)
-                loaded = Npcs.Load(NpcsFile);
+                loaded = Npcs.Load(NpcsFile) && ZoneNpcs.AddDefinitionsTo(Npcs);
             else if (e.FullPath == NpcMovementsFile)
                 loaded = NpcMovements.Load(NpcMovementsFile);
             else if (e.FullPath == NpcAmbientFile)
@@ -483,6 +520,8 @@ public class ResourceManager : IResourceManager, IDisposable
                 loaded = CombatAbilities.Load(CombatAbilitiesFile);
             else if (e.FullPath == CombatJobsFile)
                 loaded = CombatJobs.Load(CombatJobsFile);
+            else if (e.FullPath == QuestsFile)
+                loaded = Quests.Load(QuestsFile);
             else
                 _logger.LogWarning("Unknown file changed. File: {filepath}", e.FullPath);
 

@@ -1,6 +1,5 @@
-using Sanctuary.Game.Entities;
+﻿using Sanctuary.Game.Entities;
 using Sanctuary.Game.Helpers;
-using Sanctuary.Packet;
 
 using System.Numerics;
 
@@ -31,15 +30,8 @@ public class TeleportCommand : IChatCommand
 
         var currentRotation = invoker.Rotation;
 
-        invoker.UpdatePosition(newPosition, currentRotation, false);
+        invoker.Teleport(newPosition, currentRotation);
 
-        var teleportPacket = new ClientUpdatePacketUpdateLocation
-        {
-            Position = newPosition,
-            Rotation = currentRotation,
-            Teleport = true
-        };
-        invoker.SendTunneled(teleportPacket);
         ChatHelper.SendSystemMessage(invoker, $"Teleported to ({x:F2}, {y:F2}, {z:F2})");
         return true;
     }

@@ -12,6 +12,7 @@ using Sanctuary.Database;
 using Sanctuary.Database.Entities;
 using Sanctuary.Game;
 using Sanctuary.Game.Helpers;
+using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
 using Sanctuary.Packet.Common.Attributes;
@@ -54,7 +55,7 @@ public static class CoinStoreSellToClientRequestPacketHandler
             }
         };
 
-        if (!_resourceManager.ClientItemDefinitions.TryGetValue(coinStoreSellToClientRequestPacket.ItemRecord.Definition, out var clientItemDefinition))
+        if (!_resourceManager.ClientItemDefinitions.TryGetValue(coinStoreSellToClientRequestPacket.ItemRecord.Definition % ItemDefinitionHelper.CommunityColourIdStep, out var clientItemDefinition))
         {
             _logger.LogWarning("User tried to buy unknown item definition. {guid} {definition}", connection.Player.Guid, coinStoreSellToClientRequestPacket.ItemRecord.Definition);
 
@@ -70,6 +71,8 @@ public static class CoinStoreSellToClientRequestPacketHandler
             clientItemDefinition.Type != ItemDefinitionHelper.PetItemType &&
             clientItemDefinition.Type != ItemDefinitionHelper.PetClothingItemType &&
             clientItemDefinition.Type != ItemDefinitionHelper.PetUtilityItemType &&
+            clientItemDefinition.Type != ItemDefinitionHelper.HousingItemType &&
+            clientItemDefinition.Type != ItemDefinitionHelper.CustomizationItemType &&
             clientItemDefinition.Type != 12)
         {
             coinStoreTransactionCompletePacket.Result = CoinStoreTransactionResult.Error;
@@ -79,11 +82,35 @@ public static class CoinStoreSellToClientRequestPacketHandler
             return true;
         }
 
+        if (coinStoreSellToClientRequestPacket.Quantity <= 0)
+        {
+            coinStoreTransactionCompletePacket.Result = CoinStoreTransactionResult.InvalidQuantity;
+            connection.SendTunneled(coinStoreTransactionCompletePacket);
+            return true;
+        }
+        if (clientItemDefinition.Type == ItemDefinitionHelper.HousingItemType
+            && (clientItemDefinition.Cost <= 0
+                || !_resourceManager.HousingFixtures.ContainsKey(clientItemDefinition.Id)
+                || !_resourceManager.CoinStoreItems.TryGetValue(clientItemDefinition.Id, out var furnitureOffer)
+                || furnitureOffer.BuyDisabled || furnitureOffer.Hidden))
+        {
+            coinStoreTransactionCompletePacket.Result = CoinStoreTransactionResult.InvalidItem;
+            connection.SendTunneled(coinStoreTransactionCompletePacket);
+            return true;
+        }
+
         var cost = connection.Player.MembershipStatus == 0
             ? clientItemDefinition.Cost
             : clientItemDefinition.GetMemberPurchasePrice();
 
-        var totalCost = cost * coinStoreSellToClientRequestPacket.Quantity;
+        var totalCostValue = (long)cost * coinStoreSellToClientRequestPacket.Quantity;
+        if (cost < 0 || totalCostValue > int.MaxValue)
+        {
+            coinStoreTransactionCompletePacket.Result = CoinStoreTransactionResult.InvalidQuantity;
+            connection.SendTunneled(coinStoreTransactionCompletePacket);
+            return true;
+        }
+        var totalCost = (int)totalCostValue;
 
         if (connection.Player.Coins < totalCost)
         {
@@ -113,8 +140,8 @@ public static class CoinStoreSellToClientRequestPacketHandler
             {
                 Character = x,
                 Item = x.Items.SingleOrDefault(i => i.Definition == clientItemDefinition.Id && i.Tint == tint),
-                OwnedCount = x.Items.Where(i => i.Definition == clientItemDefinition.Id && (!hasTintGroup || i.Tint == tint)).Sum(i => (int?)i.Count) ?? 0,
-                NextId = x.Items.Max(i => i.Id)
+                OwnedCount = x.Items.Where(i => i.Definition == clientItemDefinition.Id && (!hasTintGroup || i.Tint == tint)).Sum(i => (long?)i.Count) ?? 0,
+                NextId = x.Items.Max(i => (int?)i.Id) ?? 0
             })
             .SingleOrDefault();
 
@@ -138,6 +165,20 @@ public static class CoinStoreSellToClientRequestPacketHandler
         }
 
         var dbItem = dbQuery.Item;
+
+        if ((long)(dbItem?.Count ?? 0) + coinStoreSellToClientRequestPacket.Quantity > int.MaxValue
+            || (dbItem is null && dbQuery.NextId == int.MaxValue))
+        {
+            coinStoreTransactionCompletePacket.Result = CoinStoreTransactionResult.InvalidQuantity;
+            connection.SendTunneled(coinStoreTransactionCompletePacket);
+            return true;
+        }
+        if (dbQuery.Character.Coins < totalCost)
+        {
+            coinStoreTransactionCompletePacket.Result = CoinStoreTransactionResult.NotEnoughCoins;
+            connection.SendTunneled(coinStoreTransactionCompletePacket);
+            return true;
+        }
 
         if (dbItem is not null)
         {
@@ -219,6 +260,9 @@ public static class CoinStoreSellToClientRequestPacketHandler
 
             connection.SendTunneled(clientUpdatePacketItemUpdate);
         }
+
+        if (clientItemDefinition.Type == ItemDefinitionHelper.HousingItemType && connection.Player.Zone is HousingZone housingZone)
+            housingZone.RefreshFixtureItems(connection.Player);
 
         var clientUpdatePacketCoinCount = new ClientUpdatePacketCoinCount
         {

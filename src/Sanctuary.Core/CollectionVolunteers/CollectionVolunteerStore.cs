@@ -10,7 +10,7 @@ namespace Sanctuary.Core.CollectionVolunteers;
 public sealed class CollectionVolunteerStore
 {
     public const int MaximumNoteLength = 200;
-    public const int MaximumPendingPerUser = 500;
+    public const int DefaultMaximumPendingPerUser = 500;
     public const float DuplicateRadius = 1.5f;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -21,11 +21,17 @@ public sealed class CollectionVolunteerStore
     private readonly object _gate = new();
     private readonly string _storagePath;
     private readonly string _lockPath;
+    private readonly int _maximumPendingPerUser;
 
-    public CollectionVolunteerStore(string storagePath)
+    public CollectionVolunteerStore(
+        string storagePath,
+        int maximumPendingPerUser = DefaultMaximumPendingPerUser)
     {
+        ArgumentOutOfRangeException.ThrowIfNegative(maximumPendingPerUser);
+
         _storagePath = Path.GetFullPath(storagePath);
         _lockPath = $"{_storagePath}.lock";
+        _maximumPendingPerUser = maximumPendingPerUser;
 
         Directory.CreateDirectory(Path.GetDirectoryName(_storagePath)!);
     }
@@ -63,9 +69,9 @@ public sealed class CollectionVolunteerStore
             if (latestSubmission is not null && now - latestSubmission.SubmittedAt < TimeSpan.FromSeconds(2))
                 return (CollectionVolunteerAddResult.RateLimited, (CollectionVolunteerPlacement?)null);
 
-            if (placements.Count(candidate =>
-                candidate.SubmittedByUserId == proposed.SubmittedByUserId &&
-                candidate.Status == CollectionVolunteerPlacementStatus.Pending) >= MaximumPendingPerUser)
+            if (_maximumPendingPerUser > 0 && placements.Count(candidate =>
+                    candidate.SubmittedByUserId == proposed.SubmittedByUserId &&
+                    candidate.Status == CollectionVolunteerPlacementStatus.Pending) >= _maximumPendingPerUser)
             {
                 return (CollectionVolunteerAddResult.PendingLimitReached, (CollectionVolunteerPlacement?)null);
             }

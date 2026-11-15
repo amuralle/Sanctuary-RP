@@ -42,6 +42,7 @@ public static class PacketTunneledClientPacketHandler
             PacketClientFinishedLoading.OpCode => PacketClientFinishedLoadingHandler.HandlePacket(connection),
             PacketClientIsReady.OpCode => PacketClientIsReadyHandler.HandlePacket(connection),
             BaseChatPacket.OpCode => BaseChatPacketHandler.HandlePacket(connection, reader),
+            BaseTradePacket.OpCode => BaseTradePacketHandler.HandlePacket(connection, reader),
             BaseCommandPacket.OpCode => BaseCommandPacketHandler.HandlePacket(connection, reader),
             BasePlayerUpdatePacket.OpCode => BasePlayerUpdatePacketHandler.HandlePacket(connection, reader),
             BaseAbilityPacket.OpCode => BaseAbilityPacketHandler.HandlePacket(connection, reader),
@@ -57,6 +58,7 @@ public static class PacketTunneledClientPacketHandler
             PlayerUpdatePacketUpdatePosition.OpCode => PlayerUpdatePacketUpdatePositionHandler.HandlePacket(connection, packetTunneledClientPacket.Payload),
             PlayerUpdatePacketCameraUpdate.OpCode => PlayerUpdatePacketCameraUpdateHandler.HandlePacket(connection, packetTunneledClientPacket.Payload),
             BaseHousingPacket.OpCode => BaseHousingPacketHandler.HandlePacket(connection, reader),
+            BaseRatingPacket.OpCode => BaseRatingPacketHandler.HandlePacket(connection, reader),
             BasePlayerTitlePacket.OpCode => BasePlayerTitlePacketHandler.HandlePacket(connection, reader),
             PacketAddClientPortraitCrc.OpCode => PacketAddClientPortraitCrcHandler.HandlePacket(connection, packetTunneledClientPacket.Payload),
             BaseFotomatPacket.OpCode => BaseFotomatPacketHandler.HandlePacket(connection, reader),
@@ -66,7 +68,10 @@ public static class PacketTunneledClientPacketHandler
             PetBasePacket.OpCode => PetBasePacketHandler.HandlePacket(connection, reader),
             PacketClientInitializationDetails.OpCode => PacketClientInitializationDetailsHandler.HandlePacket(connection, packetTunneledClientPacket.Payload),
             BaseNameChangePacket.OpCode => BaseNameChangePacketHandler.HandlePacket(connection, reader),
+            BaseQuestPacket.OpCode => BaseQuestPacketHandler.HandlePacket(connection, reader),
+            BaseUiPacket.OpCode => BaseUiPacketHandler.HandlePacket(connection, reader),
             ClientPathBasePacket.OpCode => ClientPathBasePacketHandler.HandlePacket(connection, reader),
+            BaseInspectPacket.OpCode => BaseInspectPacketHandler.HandlePacket(connection, reader),
             _ => false
         };
 

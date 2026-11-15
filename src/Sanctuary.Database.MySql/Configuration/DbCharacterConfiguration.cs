@@ -60,7 +60,7 @@ public sealed class DbCharacterConfiguration : IEntityTypeConfiguration<DbCharac
         builder.Property(c => c.ChatBubbleBackgroundColor).IsRequired().HasDefaultValue(0xD4E2F0);
         builder.Property(c => c.ChatBubbleSize).IsRequired().HasDefaultValue(1);
 
-        builder.Property(c => c.Coins).IsRequired();
+        builder.Property(c => c.Coins).IsRequired().IsConcurrencyToken();
         builder.Property(c => c.StationCash).IsRequired();
 
         builder.Property(c => c.Created).IsRequired().HasDefaultValueSql("NOW()");
@@ -89,6 +89,11 @@ public sealed class DbCharacterConfiguration : IEntityTypeConfiguration<DbCharac
         builder.HasMany(c => c.Pets)
             .WithOne(p => p.Character)
             .HasForeignKey(p => p.CharacterId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(c => c.Houses)
+            .WithOne(h => h.Character)
+            .HasForeignKey(h => h.CharacterId)
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasMany(c => c.Friends)

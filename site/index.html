@@ -154,12 +154,23 @@
           <div><strong id="volunteer-deployed-count">0</strong><span>deployed</span></div>
         </div>
 
+        <div class="placement-gap-panel" aria-live="polite">
+          <div>
+            <h3>Placement gaps</h3>
+            <p>Prioritize pools with no submissions, then rare pools with only a few.</p>
+          </div>
+          <div id="placement-gap-list" class="placement-gap-list"></div>
+        </div>
+
         <div class="volunteer-command-band">
           <div>
-            <h3>Submit from your position</h3>
-            <p>Run <code>!volunteer pools</code>, then use the pool key at a suitable hardpoint.</p>
+            <h3 id="volunteer-command-heading">Submit from your position</h3>
+            <p id="volunteer-command-help">Select a collection pool to get its exact placement command.</p>
           </div>
-          <code>!volunteer place [pool] [optional note]</code>
+          <div class="volunteer-command-action">
+            <code id="volunteer-place-command">!volunteer place [pool] [optional note]</code>
+            <button id="copy-volunteer-command" class="secondary-button" type="button" disabled>Copy command</button>
+          </div>
         </div>
 
         <div class="collection-map-layout">
@@ -245,7 +256,7 @@
               </ol>
 
               <h4>Current collection groups</h4>
-              <p class="current-pool-intro">These groups are live for volunteer placement now. Copy the pool key exactly as shown.</p>
+              <p class="current-pool-intro">These repeatable collection groups are live for volunteer placement now. Copy the pool key exactly as shown.</p>
               <table class="collection-pool-table">
                 <thead>
                   <tr><th>Region</th><th>Regular / elite</th><th>Rare</th></tr>
@@ -265,6 +276,16 @@
                     <td>Stillwater (water)</td>
                     <td><code>stillwater-sparkling-water</code></td>
                     <td><code>stillwater-sparkling-water-rare</code></td>
+                  </tr>
+                  <tr>
+                    <td>Nettleseed (water)</td>
+                    <td><code>nettleseed-sparkling-water</code></td>
+                    <td><code>nettleseed-sparkling-water-rare</code></td>
+                  </tr>
+                  <tr>
+                    <td>Merry Vale (water)</td>
+                    <td><code>merryvale-sparkling-water</code></td>
+                    <td><code>merryvale-sparkling-water-rare</code></td>
                   </tr>
                   <tr>
                     <td>Stillwater (flowers)</td>
@@ -297,11 +318,6 @@
                     <td><code>seaside-sparkling-water-rare</code></td>
                   </tr>
                   <tr>
-                    <td>Shrouded Glade (exploration coins)</td>
-                    <td><code>shrouded-glade-elite-exploration</code></td>
-                    <td><code>shrouded-glade-rare-exploration</code></td>
-                  </tr>
-                  <tr>
                     <td>Snowhill (flowers)</td>
                     <td><code>snowhill-flowers</code></td>
                     <td><code>snowhill-flowers-rare</code></td>
@@ -315,11 +331,6 @@
                     <td>Snowhill (water)</td>
                     <td><code>snowhill-sparkling-water</code></td>
                     <td><code>snowhill-sparkling-water-rare</code></td>
-                  </tr>
-                  <tr>
-                    <td>Snowhill (exploration coins)</td>
-                    <td><code>snowhill-elite-exploration</code></td>
-                    <td><code>snowhill-rare-exploration</code></td>
                   </tr>
                   <tr>
                     <td>Sanctuary / Central Wilds (water)</td>
@@ -353,13 +364,47 @@
                   </tr>
                 </tbody>
               </table>
+
+              <h4>Expanded collection coverage</h4>
+              <p class="current-pool-intro">These extra collection families are folded into the broad node pools above, so volunteers can keep using the same regional commands.</p>
+              <table class="collection-pool-table">
+                <thead>
+                  <tr><th>Node pool</th><th>Additional collection families now covered</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Seaside shells</td>
+                    <td>generic shells, sand dollars, seasnails</td>
+                  </tr>
+                  <tr>
+                    <td>Sparkling water</td>
+                    <td>regional water samples, liquid concoctions, mixtures, water rings. Nettleseed and Merry Vale use their own dedicated water pool commands.</td>
+                  </tr>
+                  <tr>
+                    <td>Mushrooms and leaf piles</td>
+                    <td>spotted mushrooms, frosty/enchanted mushrooms, button mushrooms, portobello mushrooms, shiitake mushrooms, toxic mushrooms, pine cones</td>
+                  </tr>
+                  <tr>
+                    <td>Leaf piles</td>
+                    <td>ants, spiders, caterpillars, centipedes, snails, fireflies, butterflies</td>
+                  </tr>
+                  <tr>
+                    <td>Fossils</td>
+                    <td>ancient arrowheads, bones, chalices, statues, jugs, masks, plates, urns</td>
+                  </tr>
+                  <tr>
+                    <td>Robgoblin junk</td>
+                    <td>bottles, light effects, multicolor buttons, medals, knives, plates, apples, rings, trophies, springs, torches, bagged oddities, extra key sets</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
 
           <div class="collection-guide-notes">
             <p><strong>Regular versus rare:</strong> Use rare pools for deliberately scarce, harder-to-reach hardpoints. They are reviewed and tuned separately from regular locations.</p>
             <p><strong>Seaside shells:</strong> Shell pools are reserved for Seaside-style beaches, sand, coves, docks, and shoreline paths.</p>
-            <p><strong>Exploration coins:</strong> Shrouded Glade coin locations are ready for surveying. Their temporary item rewards let volunteers test each hardpoint; native one-time exploration progression is being implemented separately.</p>
+            <p><strong>Exploration coins:</strong> One-time exploration coin routes are tracked separately from repeatable node placement, so they are not included in this field guide.</p>
             <p><strong>Submission safeguards:</strong> Matching locations within 1.5 units are rejected, placements have a two-second cooldown, and notes are limited to 200 characters.</p>
             <p><strong>Status:</strong> Pending locations await review; accepted locations passed review; rejected locations need replacement; deployed entries already exist in server configuration.</p>
           </div>
@@ -421,7 +466,7 @@
           </div>
           <div>
             <h3>Scene limits</h3>
-            <p><strong>40</strong> miniatures per player, <strong>200</strong> per zone, with a short placement cooldown.</p>
+            <p><strong>500</strong> miniatures per player, <strong>2,000</strong> per zone, with a short placement cooldown.</p>
           </div>
         </div>
         <div class="download-row">
@@ -435,21 +480,6 @@
       </div>
     </section>
   </main>
-
-  <footer class="content-width server-view" aria-labelledby="community-heading">
-    <div class="section-heading">
-      <p class="eyebrow">OSFR-RP community project</p>
-      <h2 id="community-heading">Build scenes. Share the world.</h2>
-      <p>A Free Realms roleplay and tabletop server built on Sanctuary. Join the community, explore the source, or help improve the toolkit.</p>
-    </div>
-    <nav class="download-row" aria-label="Community and project links">
-      <a class="primary-button link-button" href="https://discord.gg/hrA85MU9Px">Join our Discord</a>
-      <a class="secondary-button link-button" href="https://github.com/amuralle/Sanctuary-RP">Source on GitHub</a>
-      <a class="secondary-button link-button" href="https://github.com/amuralle/Sanctuary-RP/blob/main/README.md">Project documentation</a>
-      <a class="secondary-button link-button" href="https://github.com/amuralle/Sanctuary-RP/blob/main/CHANGELOG.md">Project updates</a>
-    </nav>
-  </footer>
-
 
   <dialog id="login-dialog" class="login-dialog">
     <form id="login-form">

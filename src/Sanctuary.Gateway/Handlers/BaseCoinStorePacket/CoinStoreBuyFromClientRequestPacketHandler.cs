@@ -9,6 +9,7 @@ using Sanctuary.Core.Helpers;
 using Sanctuary.Database;
 using Sanctuary.Game;
 using Sanctuary.Game.Helpers;
+using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
 using Sanctuary.Packet.Common.Attributes;
@@ -51,6 +52,13 @@ public static class CoinStoreBuyFromClientRequestPacketHandler
 
         var clientItem = connection.Player.Items.SingleOrDefault(x => x.Id == coinStoreBuyFromClientRequestPacket.ItemGuid);
 
+        if (coinStoreBuyFromClientRequestPacket.Quantity <= 0)
+        {
+            coinStoreTransactionCompletePacket.Result = CoinStoreTransactionResult.InvalidQuantity;
+            connection.SendTunneled(coinStoreTransactionCompletePacket);
+            return true;
+        }
+
         if (clientItem is null)
         {
             coinStoreTransactionCompletePacket.Result = CoinStoreTransactionResult.InvalidItem;
@@ -78,6 +86,13 @@ public static class CoinStoreBuyFromClientRequestPacketHandler
             return true;
         }
 
+        if (clientItemDefinition.NoSale)
+        {
+            coinStoreTransactionCompletePacket.Result = CoinStoreTransactionResult.InvalidItem;
+            connection.SendTunneled(coinStoreTransactionCompletePacket);
+            return true;
+        }
+
         using var dbContext = _dbContextFactory.CreateDbContext();
 
         var dbQuery = dbContext.Characters
@@ -100,7 +115,18 @@ public static class CoinStoreBuyFromClientRequestPacketHandler
 
         var dbItem = dbQuery.Item;
 
-        var deleteItem = clientItem.Count == coinStoreBuyFromClientRequestPacket.Quantity;
+        var proceeds = (long)clientItemDefinition.ResellValue * coinStoreBuyFromClientRequestPacket.Quantity;
+        if (dbItem.Count < coinStoreBuyFromClientRequestPacket.Quantity || proceeds < 0
+            || (long)dbQuery.Character.Coins + proceeds > int.MaxValue)
+        {
+            coinStoreTransactionCompletePacket.Result = CoinStoreTransactionResult.InvalidQuantity;
+            connection.SendTunneled(coinStoreTransactionCompletePacket);
+            return true;
+        }
+        // A zero-count stack can still own placed fixtures; pickup must restore that same row.
+        var hasPlacedFixtures = clientItemDefinition.Type == ItemDefinitionHelper.HousingItemType
+            && dbContext.HouseFixtures.Any(fixture => fixture.CharacterId == dbQuery.Character.Id && fixture.ItemId == dbItem.Id);
+        var deleteItem = dbItem.Count == coinStoreBuyFromClientRequestPacket.Quantity && !hasPlacedFixtures;
 
         var isPetItem = clientItemDefinition.Type == ItemDefinitionHelper.PetClothingItemType || clientItemDefinition.Type == ItemDefinitionHelper.PetUtilityItemType;
 
@@ -117,7 +143,7 @@ public static class CoinStoreBuyFromClientRequestPacketHandler
         else
             dbItem.Count -= coinStoreBuyFromClientRequestPacket.Quantity;
 
-        dbQuery.Character.Coins += clientItemDefinition.ResellValue * coinStoreBuyFromClientRequestPacket.Quantity;
+        dbQuery.Character.Coins += (int)proceeds;
 
         if (dbContext.SaveChanges() <= 0)
         {
@@ -159,6 +185,9 @@ public static class CoinStoreBuyFromClientRequestPacketHandler
 
             connection.SendTunneled(clientUpdatePacketItemUpdate);
         }
+
+        if (clientItemDefinition.Type == ItemDefinitionHelper.HousingItemType && connection.Player.Zone is HousingZone housingZone)
+            housingZone.RefreshFixtureItems(connection.Player);
 
         var clientUpdatePacketCoinCount = new ClientUpdatePacketCoinCount
         {

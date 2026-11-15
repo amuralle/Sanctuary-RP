@@ -12,12 +12,18 @@ public abstract class DatabaseContext : DbContext
     public DbSet<DbTitle> Titles => Set<DbTitle>();
     public DbSet<DbMount> Mounts => Set<DbMount>();
     public DbSet<DbPet> Pets => Set<DbPet>();
+    public DbSet<DbHouse> Houses => Set<DbHouse>();
+    public DbSet<DbHouseFixture> HouseFixtures => Set<DbHouseFixture>();
+    public DbSet<DbHouseVote> HouseVotes => Set<DbHouseVote>();
+    public DbSet<DbHousingGuid> HousingGuids => Set<DbHousingGuid>();
     public DbSet<DbGuild> Guilds => Set<DbGuild>();
     public DbSet<DbFriend> Friends => Set<DbFriend>();
     public DbSet<DbIgnore> Ignores => Set<DbIgnore>();
     public DbSet<DbProfile> Profiles => Set<DbProfile>();
     public DbSet<DbCharacter> Characters => Set<DbCharacter>();
     public DbSet<DbGuildMember> GuildMembers => Set<DbGuildMember>();
+    public DbSet<DbCharacterQuest> CharacterQuests => Set<DbCharacterQuest>();
+    public DbSet<DbCharacterQuestProgress> CharacterQuestProgress => Set<DbCharacterQuestProgress>();
 
     public DatabaseContext()
     {
