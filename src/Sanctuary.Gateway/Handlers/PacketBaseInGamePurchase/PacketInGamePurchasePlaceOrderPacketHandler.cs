@@ -12,6 +12,7 @@ using Sanctuary.Database;
 using Sanctuary.Database.Entities;
 using Sanctuary.Game;
 using Sanctuary.Game.Helpers;
+using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
 using Sanctuary.Packet.Common.Attributes;
@@ -66,6 +67,8 @@ public static class PacketInGamePurchasePlaceOrderPacketHandler
         {
             return SendOrderResult(connection, packetInGamePurchasePlaceOrderResponse, InGamePurchaseOrderResult.OrderFailure);
         }
+        if (appStoreBundleDefinition.MaxPerOrder > 0 && orderDetail.Quantity > appStoreBundleDefinition.MaxPerOrder)
+            return SendOrderResult(connection, packetInGamePurchasePlaceOrderResponse, InGamePurchaseOrderResult.OrderFailure);
 
         if (!int.TryParse(orderDetail.Tint, out var orderDetailTint))
         {
@@ -103,6 +106,8 @@ public static class PacketInGamePurchasePlaceOrderPacketHandler
         {
             return SendOrderResult(connection, packetInGamePurchasePlaceOrderResponse, InGamePurchaseOrderResult.OrderFailure);
         }
+        if (dbCharacter.StationCash < totalCost)
+            return SendOrderResult(connection, packetInGamePurchasePlaceOrderResponse, InGamePurchaseOrderResult.BalanceNotEnough);
 
         var lastItemId = dbCharacter.Items.Count > 0 ? dbCharacter.Items.Max(i => i.Id) : 0;
         var lastMountId = dbCharacter.Mounts.Count > 0 ? dbCharacter.Mounts.Max(x => x.Id) : 0;
@@ -118,31 +123,44 @@ public static class PacketInGamePurchasePlaceOrderPacketHandler
             }
 
             if (clientItemDefinition.Type == 1 || clientItemDefinition.Type == ItemDefinitionHelper.PetClothingItemType
-                || clientItemDefinition.Type == ItemDefinitionHelper.PetUtilityItemType || clientItemDefinition.Type == 12)
+                || clientItemDefinition.Type == ItemDefinitionHelper.PetUtilityItemType || clientItemDefinition.Type == 12
+                || clientItemDefinition.Type == ItemDefinitionHelper.MysteryChestItem
+                || clientItemDefinition.Type == ItemDefinitionHelper.HouseItemType || clientItemDefinition.Type == ItemDefinitionHelper.HousingItemType)
             {
-                var totalQuantity = orderDetail.Quantity * bundleEntry.Quantity;
+                var totalQuantityValue = (long)orderDetail.Quantity * bundleEntry.Quantity;
+                if (bundleEntry.Quantity <= 0 || totalQuantityValue > int.MaxValue)
+                    return SendOrderResult(connection, packetInGamePurchasePlaceOrderResponse, InGamePurchaseOrderResult.OrderFailure);
+                var totalQuantity = (int)totalQuantityValue;
+                var itemTint = clientItemDefinition.Type == ItemDefinitionHelper.HousingItemType && !appStoreBundleDefinition.IsTintable
+                    ? clientItemDefinition.Icon.TintId
+                    : orderDetailTint;
 
                 if (clientItemDefinition.MaxStackSize > 0
                     && dbCharacter.Items.Where(i => i.Definition == clientItemDefinition.Id && (!appStoreBundleDefinition.IsTintable || i.Tint == orderDetailTint))
-                        .Sum(i => i.Count) + totalQuantity > clientItemDefinition.MaxStackSize)
+                        .Sum(i => (long)i.Count) + totalQuantity > clientItemDefinition.MaxStackSize)
                 {
                     return SendOrderResult(connection, packetInGamePurchasePlaceOrderResponse, InGamePurchaseOrderResult.OrderFailure);
                 }
 
-                var dbItem = dbCharacter.Items.SingleOrDefault(i =>
-                    i.Definition == clientItemDefinition.Id && i.Tint == orderDetailTint);
+                var dbItem = clientItemDefinition.Type != ItemDefinitionHelper.HouseItemType
+                    ? dbCharacter.Items.SingleOrDefault(i => i.Definition == clientItemDefinition.Id && i.Tint == itemTint)
+                    : null;
 
                 if (dbItem is not null)
                 {
+                    if ((long)dbItem.Count + totalQuantity > int.MaxValue)
+                        return SendOrderResult(connection, packetInGamePurchasePlaceOrderResponse, InGamePurchaseOrderResult.OrderFailure);
                     dbItem.Count += totalQuantity;
                 }
                 else
                 {
+                    if (lastItemId == int.MaxValue)
+                        return SendOrderResult(connection, packetInGamePurchasePlaceOrderResponse, InGamePurchaseOrderResult.OrderFailure);
                     dbItem = new DbItem
                     {
                         Id = ++lastItemId,
                         Definition = clientItemDefinition.Id,
-                        Tint = orderDetailTint,
+                        Tint = itemTint,
 
                         Count = totalQuantity
                     };
@@ -155,7 +173,7 @@ public static class PacketInGamePurchasePlaceOrderPacketHandler
 
                 pendingUpdates.Add(() =>
                 {
-                    var clientItem = connection.Player.Items.SingleOrDefault(x => x.Definition == itemDefinition.Id && x.Tint == orderDetailTint);
+                    var clientItem = connection.Player.Items.SingleOrDefault(x => x.Id == savedItem.Id);
 
                     var addItem = false;
 
@@ -191,6 +209,8 @@ public static class PacketInGamePurchasePlaceOrderPacketHandler
                         clientUpdatePacketItemAdd.Payload = writer.Buffer;
 
                         connection.SendTunneled(clientUpdatePacketItemAdd);
+
+                        HousingHelper.NotifyHouseAdded(_resourceManager, _dbContextFactory, connection.Player, itemDefinition, clientItem.Id);
                     }
                     else
                     {
@@ -202,6 +222,8 @@ public static class PacketInGamePurchasePlaceOrderPacketHandler
 
                         connection.SendTunneled(clientUpdatePacketItemUpdate);
                     }
+                    if (itemDefinition.Type == ItemDefinitionHelper.HousingItemType && connection.Player.Zone is HousingZone housingZone)
+                        housingZone.RefreshFixtureItems(connection.Player);
                 });
             }
             else if (clientItemDefinition.Type == ItemDefinitionHelper.PetItemType)

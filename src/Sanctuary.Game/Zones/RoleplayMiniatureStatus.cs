@@ -46,7 +46,8 @@ public sealed record RoleplayMiniatureStatus(
     string Group,
     ulong OwnerGuid,
     string OwnerName,
-    Vector4 Position);
+    Vector4 Position,
+    Quaternion Rotation);
 
 public static class RoleplayMiniatureRules
 {
@@ -54,8 +55,8 @@ public static class RoleplayMiniatureRules
     public const int MaximumNameLength = 40;
     public const int MaximumGroupLength = 24;
     public const int MaximumSpeechLength = 180;
-    public const int MaximumPerPlayer = 40;
-    public const int MaximumPerZone = 200;
+    public const int MaximumPerPlayer = 500;
+    public const int MaximumPerZone = 2000;
     public const float MaximumMovementDistance = 250f;
     public const float MovementSpeed = 6.25f;
     public const float WaypointTolerance = 0.25f;

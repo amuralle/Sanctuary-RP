@@ -2,18 +2,18 @@
   "Server": {
     "Port": 20260,
     "UseCompression": true,
-
     "Environment": "live",
     "ClientVersion": "1.910.1.530630",
-
     "ServerAddress": "127.0.0.1:20260",
-
     "LoginGatewayAddress": "localhost:20041",
     "LoginGatewayChallenge": "OSFR-EDITz@2024",
-
     "ShowMemberNagScreen": false
   },
   "CollectionVolunteers": {
-    "StoragePath": "Data/CollectionVolunteers/placements.json"
+    "StoragePath": "Data/CollectionVolunteers/placements.json",
+    "MaximumPendingPerUser": 0
+  },
+  "RoleplayMiniatures": {
+    "StoragePath": "Data/RoleplayMiniatures/snapshots.json"
   }
 }

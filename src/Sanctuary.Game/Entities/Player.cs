@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -8,6 +8,8 @@ using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
 
+using Microsoft.Extensions.Logging;
+
 using Sanctuary.Core.Collections;
 using Sanctuary.Core.Extensions;
 using Sanctuary.Core.IO;
@@ -16,8 +18,10 @@ using Sanctuary.Game;
 using Sanctuary.Game.ChatCommands;
 using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Interactions;
+using Sanctuary.Game.Quests;
 using Sanctuary.Game.Resources.Definitions.Combat;
 using Sanctuary.Game.Resources.Definitions;
+using Sanctuary.Game.Routines;
 using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
@@ -27,7 +31,7 @@ using Sanctuary.UdpLibrary.Enumerations;
 
 namespace Sanctuary.Game.Entities;
 
-public sealed class Player : ClientPcData, IEntity
+public sealed class Player : ClientPcData, IEntity, ITradeParticipant
 {
     private enum PacketSendType
     {
@@ -42,6 +46,12 @@ public sealed class Player : ClientPcData, IEntity
     private const int ActionBarSlotUnknown5 = 1;
     private const int ActionBarSlotUnknown6 = 4;
     private const int ActionBarSlotUnknown7 = 15;
+    private const float OnFootMovementSpeed = 8f;
+    private const double AreaSettleSeconds = 1.5;
+    private const string PointOfInterestRoutineName = "PointOfInterest";
+    private const string TeleportRoutineName = "Teleport";
+    private const double TeleportTimeoutSeconds = 3;
+    private const int TeleportSequenceCount = 4;
 
     private readonly UdpConnection _connection;
     private readonly IResourceManager _resourceManager;
@@ -50,6 +60,8 @@ public sealed class Player : ClientPcData, IEntity
     public bool Visible { get; set; }
     public bool RoleplayHidden { get; private set; }
     public int RoleplayTemporaryAppearance { get; private set; }
+
+    public RoutineManager Routines { get; }
 
     public IZone Zone { get; set; }
     public ZoneTile ZoneTile { get; private set; } = ZoneTile.Empty;
@@ -60,7 +72,14 @@ public sealed class Player : ClientPcData, IEntity
     private uint? _pendingPortraitCrc;
     private DateTimeOffset _portraitUpdateExpiresAt;
 
-    private int ZoneAreaId { get; set; }
+    public int PointOfInterestId { get; private set; }
+    public int ChatAreaNameId { get; private set; }
+
+    public byte TeleportSequence { get; private set; }
+
+    // TODO: We should PR a change to the routine manager to check if a routine is running by its key.
+    private Routine? _teleportRoutine;
+    private ZoneAreaDefinition? _pendingZoneArea;
 
     public int ChatBubbleForegroundColor { get; set; }
     public int ChatBubbleBackgroundColor { get; set; }
@@ -81,6 +100,9 @@ public sealed class Player : ClientPcData, IEntity
     public Dictionary<int, PetTrait> PetTraits { get; } = [];
     public Dictionary<int, DateTimeOffset> PetTreasureFoundAt { get; } = [];
 
+    public Dictionary<ulong, ulong> HouseInvites { get; } = [];
+    public bool IsPreviewingHouse { get; set; }
+
     public PetClientInfo? GetPetClientInfo(int petId) => Pets.FirstOrDefault(petClientInfo => petClientInfo.Id == petId);
 
     public PetClientInfo? GetActivePetClientInfo() => GetPetClientInfo(ActivePetId);
@@ -91,13 +113,24 @@ public sealed class Player : ClientPcData, IEntity
     public ConcurrentSet<ulong> IncomingFriendRequests { get; } = [];
     public ConcurrentSet<ulong> IncomingGuildInvites { get; } = [];
 
+
+    public ulong CharacterId { get; set; }
+
+    public QuestLog Quests { get; } = new();
+
+    public QuestConversation QuestConversation { get; } = new();
+
+    public ulong ObjectiveTaskId { get; } = (ulong)Random.Shared.NextInt64();
+
     public ConcurrentDictionary<ChatChannel, bool> ChatChannelStatus { get; set; } = [];
+
+    private static readonly ChatChannel[] DefaultEnabledChatChannels = [ChatChannel.WorldArea, ChatChannel.WorldMembersOnly];
 
     public DateTimeOffset LoginStartedAt { get; set; }
 
-    public long NextClientPathRequestAt { get; set; }
     public int SecondsSinceLastLogin { get; set; } = -1;
     public ConcurrentSet<int> CollectedCollectionEntryIds { get; } = [];
+    public ConcurrentSet<int> InspectedItemDefinitionIds { get; } = [];
 
     public int StationCash { get; set; }
     public List<CoinStoreTransactionRecord> CoinStoreTransactions { get; set; } = [];
@@ -123,6 +156,8 @@ public sealed class Player : ClientPcData, IEntity
     public int BoomboxDanceAnimation { get; set; }
     public bool BoomboxDanceIsStanding { get; set; }
     public int BoomboxDanceTransform { get; set; }
+    // TODO: Move into player gesture state when Player is cleaned up.
+    public bool IsPlayingOutfitGesture { get; set; }
 
     public const float DefaultScale = 1f;
 
@@ -195,6 +230,105 @@ public sealed class Player : ClientPcData, IEntity
         _resourceManager = resourceManager;
         _zoneManager = zoneManager;
         PlayerPet = new PlayerPet(this, resourceManager);
+
+        Routines = new RoutineManager(zone.Logger, zone.TickDelta);
+    }
+
+    ulong ITradeParticipant.TradeGuid => Guid;
+    ulong ITradeParticipant.TradeCharacterId => GuidHelper.GetPlayerId(Guid);
+    int ITradeParticipant.TradeCoins => Coins;
+    void ITradeParticipant.DisconnectForTradeResync() => _connection.Disconnect();
+    void ITradeParticipant.SendTunneled(ISerializablePacket packet)
+    {
+        if (!_connection.Send(UdpChannel.Reliable1, SerializeTunneled(packet)))
+            throw new IOException("Trade packet could not be queued on the connection.");
+    }
+
+    IReadOnlyList<ISerializablePacket> ITradeParticipant.ApplyTradeResult(TradeParticipantResult result)
+    {
+        var packets = new List<ISerializablePacket>();
+        foreach (var (change, definition) in result.Items)
+        {
+            var item = Items.SingleOrDefault(x => x.Id == change.Id);
+            if (change.Count == 0)
+            {
+                if (item is not null) Items.Remove(item);
+                packets.Add(new ClientUpdatePacketItemDelete { ItemGuid = change.Id });
+                foreach (var bar in ActionBarItemGuids)
+                    foreach (var slot in bar.Value.Where(x => x.Value == change.Id).Select(x => x.Key).ToArray())
+                    {
+                        CancelScheduledSlotPacket(bar.Key, slot);
+                        bar.Value.Remove(slot);
+                        var clear = new ClientUpdatePacketUpdateActionBarSlot { Data = { Id = bar.Key, Slot = slot } };
+                        clear.Slot.IsEmpty = true;
+                        packets.Add(clear);
+                    }
+            }
+            else if (item is not null)
+            {
+                item.Count = change.Count;
+                packets.Add(new ClientUpdatePacketItemUpdate { ItemGuid = item.Id, Count = item.Count,
+                    ConsumedCount = item.ConsumedCount, AbilityCount = item.AbilityCount });
+                RefreshItemActionBarSlots(item, definition, packets);
+            }
+            else
+            {
+                item = new ClientItem { Id = change.Id, Definition = change.Definition, Tint = change.Tint, Count = change.Count };
+                Items.Add(item);
+                using var writer = new PacketWriter();
+                item.Serialize(writer);
+                definition.Serialize(writer);
+                packets.Add(new ClientUpdatePacketItemAdd { Payload = writer.Buffer });
+            }
+        }
+        Coins = result.Coins;
+        packets.Add(new ClientUpdatePacketCoinCount { Coins = Coins });
+        return packets;
+    }
+
+    private void RefreshItemActionBarSlots(ClientItem item, ClientItemDefinition definition, List<ISerializablePacket> packets)
+    {
+        var tint = item.Tint == 0 ? definition.Icon.TintId : item.Tint;
+        var coolingDown = TryGetItemCooldown(item.Definition, out var totalMs, out var elapsedMs);
+        foreach (var bar in ActionBarItemGuids)
+            foreach (var slot in bar.Value.Where(x => x.Value == item.Id).Select(x => x.Key))
+            {
+                var update = BuildActionBarSlotPacket(bar.Key, slot, definition.Icon.Id, tint,
+                    definition.NameId, item.Count, coolingDown ? totalMs : 1000,
+                    enabled: !coolingDown, elapsed: coolingDown ? elapsedMs : 1000);
+                if (ActionBars.TryGetValue(bar.Key, out var actionBar))
+                    actionBar.Slots[slot] = update.Slot;
+                packets.Add(update);
+
+                // Preserve the pending re-enable time and state, but don't let it
+                // restore the pre-trade stack count when the cooldown expires.
+                if (_delayedSlotPackets.TryGetValue((bar.Key, slot), out var pending)
+                    && pending.Packet is ClientUpdatePacketUpdateActionBarSlot enable)
+                    enable.Slot.Quantity = item.Count;
+            }
+    }
+
+    NameData ITradeParticipant.TradeName => Name;
+    object ITradeParticipant.TradeContext => Zone;
+    bool ITradeParticipant.TradeAvailable => _connection.Status == Status.Connected;
+
+    bool ITradeParticipant.TryGetTradeItem(int itemId, out ItemInstance item, out ClientItemDefinition definition, out int available)
+    {
+        item = null!;
+        definition = null!;
+        available = 0;
+        var owned = Items.FirstOrDefault(x => x.Id == itemId);
+        if (owned is null || !_resourceManager.ClientItemDefinitions.TryGetValue(owned.Definition, out var found))
+            return false;
+        item = owned;
+        definition = found;
+        // Reserve equipment copies; profile references can share the same physical copy.
+        var profileEquipped = Profiles.Any(profile => profile.Items.Values.Any(x => x.Id == itemId));
+        var equippedPets = Pets.Count(pet => TradeItemRules.PetUsesItem(itemId, pet.ItemGuids.Contains(itemId),
+            pet.ShampooItemGuid, pet.ConditionerItemGuid, pet.ToyItemGuid, pet.BrushItemGuid,
+            pet.FoodBowlItemGuid, pet.FoodItemGuid, pet.VitaminItemGuid));
+        available = TradeItemRules.AvailableCount(owned.Count, owned.ConsumedCount, profileEquipped, equippedPets);
+        return true;
     }
 
     #region Connection
@@ -310,10 +444,11 @@ public sealed class Player : ClientPcData, IEntity
             CompositeEffectId = 46
         }, sendToSelf: true);
 
-        UpdateMovementStats(
-            CharacterStats.MaxMovementSpeed.Set(8f),
+        UpdateCharacterStats(
             CharacterStats.GlideEnabled.Set(0),
             CharacterStats.JumpHeight.Set(0f));
+
+        SetMountMovementSpeed(null);
 
         EntityHelper.RemovePlayerGracefully(Mount, recipients: VisiblePlayers.Values.Append(this));
 
@@ -324,6 +459,9 @@ public sealed class Player : ClientPcData, IEntity
         }
 
         Mount = null;
+
+        RefreshEquipmentGlide();
+
         if (BoomboxDanceTransform != 0 && TemporaryAppearance == BoomboxDanceTransform)
             SendTunneledToVisible(new PlayerUpdatePacketUpdateTemporaryAppearance
             {
@@ -340,7 +478,10 @@ public sealed class Player : ClientPcData, IEntity
     {
         var now = DateTimeOffset.UtcNow;
 
+        Routines.OnTick();
+
         TickEffects(now);
+
         PlayerPet.UpdateEveryTick();
         SendVisiblePositions();
 
@@ -558,20 +699,22 @@ public sealed class Player : ClientPcData, IEntity
         return clientUpdatePacketUpdateActionBarSlot;
     }
 
-    public void UpdatePosition(Vector4 position, Quaternion rotation, bool updateZoneArea = true)
+    public void UpdatePosition(Vector4 position, Quaternion rotation)
     {
         Position = position;
         Rotation = rotation;
 
-        Mount?.UpdatePosition(position, rotation, updateZoneArea);
+        Mount?.UpdatePosition(position, rotation);
 
         if (Visible || RoleplayHidden)
-        {
             UpdateZoneTile();
+    }
 
-            if (updateZoneArea)
-                UpdateZoneArea();
-        }
+    public bool IsChatChannelOn(ChatChannel chatChannel)
+    {
+        return ChatChannelStatus.TryGetValue(chatChannel, out var channelStatus)
+            ? channelStatus
+            : DefaultEnabledChatChannels.Contains(chatChannel);
     }
 
     public void SetRoleplayTemporaryAppearance(int modelId)
@@ -670,14 +813,27 @@ public sealed class Player : ClientPcData, IEntity
         if (newZoneTile == ZoneTile)
             return;
 
+        if (!Zone.IsOutOfBounds(ZoneTile) && Zone.IsOutOfBounds(newZoneTile))
+            Zone.Logger.LogWarning("{name} entered out of bounds tile {tile} at {position}.", Name.FullName, newZoneTile, Position);
+
         Zone.UpdateEntityZoneTile(this, ZoneTile, newZoneTile);
 
         ZoneTile = newZoneTile;
+
+        QueuePointOfInterest();
     }
 
     public bool TeleportToZone(IZone destinationZone, Vector4 position, Quaternion rotation)
     {
         if (Zone == destinationZone)
+            return true;
+
+        return TeleportToZone(destinationZone.DefinitionId, destinationZone.OwnerId, position, rotation);
+    }
+
+    public bool TeleportToZone(int zoneDefinitionId, ulong? ownerId, Vector4 position, Quaternion rotation)
+    {
+        if (Zone.DefinitionId == zoneDefinitionId && Zone.OwnerId == ownerId && !IsPreviewingHouse)
             return true;
 
         if (Zone is WorldZone)
@@ -686,7 +842,7 @@ public sealed class Player : ClientPcData, IEntity
             StartingZoneRotation = Rotation;
         }
 
-        if (!_zoneManager.TryMovePlayerToZone(destinationZone.DefinitionId, destinationZone.OwnerId, this, position, rotation, out var zone))
+        if (!_zoneManager.TryMovePlayerToZone(zoneDefinitionId, ownerId, this, position, rotation, out var zone))
             return false;
 
         if (_appearanceEffectId != 0 && _effects.TryGetValue(_appearanceEffectId, out var appearanceEffect) && appearanceEffect.ExpiresAt is null)
@@ -725,39 +881,159 @@ public sealed class Player : ClientPcData, IEntity
             Sky = Zone.Sky,
             Id = Zone.Id,
             GeometryId = 214,
-            OverrideUpdateRadius = true
+            OverrideUpdateRadius = true,
+            TeleportSequence = BeginTeleport()
         };
 
         SendTunneled(packetClientBeginZoning);
 
+        ClearObjectives();
+
         return true;
     }
 
-    private void UpdateZoneArea()
+    public void Teleport(Vector4 position, Quaternion rotation)
     {
-        if (Zone is not WorldZone worldZone || worldZone.Name != "FabledRealms")
-            return;
+        var teleportSequence = BeginTeleport();
 
-        var zoneAreaId = worldZone.GetZoneAreaId(Position);
+        UpdatePosition(position, rotation);
 
-        if (ZoneAreaId == zoneAreaId)
-            return;
-
-        ZoneAreaId = zoneAreaId;
-
-        var packetPOIChangeMessage = new PacketPOIChangeMessage
+        var clientUpdatePacketUpdateLocation = new ClientUpdatePacketUpdateLocation
         {
-            ZoneId = zoneAreaId
+            Position = position,
+            Rotation = rotation,
+            Teleport = true,
+            TeleportSequence = teleportSequence
         };
 
-        SendTunneled(packetPOIChangeMessage);
+        SendTunneled(clientUpdatePacketUpdateLocation);
     }
 
-    public void UpdateMovementStats(params CharacterStat[] characterStats)
+    private bool IsTeleportPending => _teleportRoutine is { IsRunning: true };
+
+    private byte BeginTeleport()
     {
-        PlayerPet.RemovePetSpeedBuff();
-        UpdateCharacterStats(characterStats);
-        PlayerPet.UpdatePetSpeedBuff();
+        _pendingZoneArea = null;
+
+        Routines.Cancel(PointOfInterestRoutineName);
+
+        _teleportRoutine = new SequentialRoutine(
+            new DelegateRoutine(onStep: () => Visible),
+            new WaitRoutine(TeleportTimeoutSeconds),
+            new InstantRoutine(UpdatePointOfInterest));
+
+        Routines.SetRoutine(TeleportRoutineName, _teleportRoutine);
+
+        return TeleportSequence = (byte)((TeleportSequence + 1) % TeleportSequenceCount);
+    }
+
+    public bool TryAcceptTeleportSequence(byte teleportSequence)
+    {
+        if (!IsTeleportPending)
+            return true;
+
+        if (teleportSequence != TeleportSequence)
+            return false;
+
+        Routines.Cancel(TeleportRoutineName);
+
+        UpdatePointOfInterest();
+
+        return false;
+    }
+
+    private void QueuePointOfInterest()
+    {
+        var zoneAreaDefinition = Zone is WorldZone worldZone ? worldZone.GetZoneArea(Position, ZoneTile) : null;
+
+        if (zoneAreaDefinition is null || zoneAreaDefinition.Id == PointOfInterestId)
+        {
+            _pendingZoneArea = null;
+            Routines.Cancel(PointOfInterestRoutineName);
+            return;
+        }
+
+        if (_pendingZoneArea?.Id == zoneAreaDefinition.Id)
+            return;
+
+        _pendingZoneArea = zoneAreaDefinition;
+        Routines.SetRoutine(PointOfInterestRoutineName, new DelayedRoutine(new InstantRoutine(UpdatePendingPointOfInterest), AreaSettleSeconds));
+    }
+
+    private void UpdatePendingPointOfInterest()
+    {
+        if (IsTeleportPending || _pendingZoneArea is null)
+            return;
+
+        UpdatePointOfInterest(_pendingZoneArea);
+    }
+
+    public void UpdatePointOfInterest()
+    {
+        if (Zone is WorldZone worldZone && worldZone.GetZoneArea(Position, ZoneTile) is { } zoneAreaDefinition && zoneAreaDefinition.Id != PointOfInterestId)
+            UpdatePointOfInterest(zoneAreaDefinition);
+    }
+
+    public void UpdatePointOfInterest(ZoneAreaDefinition? zoneAreaDefinition)
+    {
+        _pendingZoneArea = null;
+
+        Routines.Cancel(PointOfInterestRoutineName);
+
+        if (zoneAreaDefinition is null || zoneAreaDefinition.Id == PointOfInterestId)
+            return;
+
+        PointOfInterestId = zoneAreaDefinition.Id;
+        ChatAreaNameId = zoneAreaDefinition.ChatAreaNameId;
+
+        if (zoneAreaDefinition.NameId != 0)
+        {
+            var packetPOIChangeMessage = new PacketPOIChangeMessage
+            {
+                NameId = zoneAreaDefinition.NameId,
+                ZoneId = zoneAreaDefinition.Id,
+                AreaId = zoneAreaDefinition.AreaId
+            };
+
+            SendTunneled(packetPOIChangeMessage);
+        }
+    }
+
+    public void SetMountMovementSpeed(float? mountMovementSpeed)
+    {
+        _mountMovementSpeed = mountMovementSpeed;
+
+        RefreshMovementSpeed();
+    }
+
+    private void RefreshMovementSpeed()
+    {
+        var maxMovementSpeed = _mountMovementSpeed ?? OnFootMovementSpeed + _effects.Values.Sum(effect => effect.MovementSpeedBonus);
+
+        UpdateCharacterStats(CharacterStats.MaxMovementSpeed.Set(maxMovementSpeed));
+    }
+
+    public void RefreshEquipmentGlide()
+    {
+        if (Mount is not null)
+            return;
+
+        var glideStats = ActiveProfile.Items.Values
+            .Select(profileItem => Items.FirstOrDefault(item => item.Id == profileItem.Id))
+            .Select(item => item is not null && _resourceManager.ClientItemDefinitions.TryGetValue(item.Definition, out var definition) ? definition.Stats : null)
+            .FirstOrDefault(stats => stats is not null && stats.ContainsKey((int)CharacterStatId.GlideEnabled));
+
+        float GlideStat(CharacterStatId id) => glideStats is not null && glideStats.TryGetValue((int)id, out var stat)
+            ? BitConverter.Int32BitsToSingle(Convert.ToInt32(stat.Value)) : 0f;
+
+        UpdateCharacterStats(
+            CharacterStats.GlideDefaultForwardSpeed.Set(GlideStat(CharacterStatId.GlideDefaultForwardSpeed)),
+            CharacterStats.GlideMinForwardSpeed.Set(GlideStat(CharacterStatId.GlideMinForwardSpeed)),
+            CharacterStats.GlideMaxForwardSpeed.Set(GlideStat(CharacterStatId.GlideMaxForwardSpeed)),
+            CharacterStats.GlideFallTime.Set(GlideStat(CharacterStatId.GlideFallTime)),
+            CharacterStats.GlideFallSpeed.Set(GlideStat(CharacterStatId.GlideFallSpeed)),
+            CharacterStats.GlideAccel.Set(GlideStat(CharacterStatId.GlideAccel)),
+            CharacterStats.GlideEnabled.Set(glideStats is null ? 0 : 1));
     }
 
     public void UpdateCharacterStats(params CharacterStat[] characterStats)
@@ -794,7 +1070,7 @@ public sealed class Player : ClientPcData, IEntity
 
     public void OnAddVisibleNpcs(params IEnumerable<Npc> npcs)
     {
-        var visibleNpcs = npcs.Where(npc => npc.IsVisibleTo(this)).ToArray();
+        var visibleNpcs = npcs.Where(npc => npc.IsVisibleTo(this) && !Zone.IsHiddenByQuest(this, npc)).ToArray();
 
         foreach (var npc in visibleNpcs)
         {
@@ -808,27 +1084,45 @@ public sealed class Player : ClientPcData, IEntity
 
             SendTunneled(playerUpdatePacketAddNpc);
             SendTunneled(new PlayerUpdatePacketUpdateCharacterState { Guid = npc.Guid, State = IdleCharacterState });
+
+            var questEffectId = Zone.GetQuestEffectId(this, npc);
+            if (questEffectId != 0)
+            {
+                SendTunneled(new PlayerUpdatePacketAddEffectTagCompositeEffect
+                {
+                    Guid = npc.Guid,
+                    TagId = EffectTagIdGenerator.Next(),
+                    CompositeEffectId = questEffectId,
+                    SourceGuid = npc.Guid
+                });
+            }
         }
 
         var playerUpdatePacketNpcRelevance = InteractionMenuHelper.GetNpcRelevancePacket(
-            visibleNpcs.Where(npc => npc is not PetTreasureChest petTreasureChest || petTreasureChest.IsOwner(this)));
+            visibleNpcs.Where(npc => npc is not PetTreasureChest petTreasureChest || petTreasureChest.IsOwner(this)),
+            npc => Zone.GetQuestBadge(this, npc) is { } badge && !ReferenceEquals(badge, npc.Notification));
         if (playerUpdatePacketNpcRelevance.Entries.Count > 0)
             SendTunneled(playerUpdatePacketNpcRelevance);
 
         var playerUpdatePacketAddNotifications = new PlayerUpdatePacketAddNotifications();
 
         foreach (var npc in visibleNpcs)
-        {
-            playerUpdatePacketAddNotifications.Notifications.AddRange(npc.Notifications);
-            if (npc.Notification is not null)
-                playerUpdatePacketAddNotifications.Notifications.Add(npc.Notification);
-        }
+            playerUpdatePacketAddNotifications.Notifications.AddRange(GetNotificationsFor(npc));
 
         if (playerUpdatePacketAddNotifications.Notifications.Count > 0)
             SendTunneled(playerUpdatePacketAddNotifications);
 
         foreach (var npc in visibleNpcs)
             VisibleNpcs.TryAdd(npc.Guid, npc);
+    }
+
+    public IEnumerable<NotificationInfo> GetNotificationsFor(Npc npc)
+    {
+        foreach (var notification in npc.Notifications)
+            yield return notification;
+
+        if ((Zone.GetQuestBadge(this, npc) ?? npc.Notification) is { } badge)
+            yield return badge;
     }
 
     public void OnAddVisiblePlayers(params IEnumerable<Player> players)
@@ -904,7 +1198,7 @@ public sealed class Player : ClientPcData, IEntity
     private static RemoveNotificationInfo GetRemoveNotificationInfo(NotificationInfo notification) => new()
     {
         Guid = notification.Guid,
-        ThoughtBubbleIconId = notification.Unknown,
+        ThoughtBubbleIconId = notification.IconState,
         CompositeEffectId = notification.Unknown2
     };
 
@@ -943,6 +1237,9 @@ public sealed class Player : ClientPcData, IEntity
 
         commandPacketInteractionList.List.Interactions.Add(InspectInteraction.Data);
 
+        if (player.Guid != Guid)
+            commandPacketInteractionList.List.Interactions.Add(TradeInteraction.Data);
+
         if (Friends.Any(x => x.Guid == player.Guid))
         {
             commandPacketInteractionList.List.Interactions.Add(RemoveFriendInteraction.Data);
@@ -973,6 +1270,17 @@ public sealed class Player : ClientPcData, IEntity
         ActiveProfile.Items.TryGetValue(slot, out var profileItem)
             ? Items.FirstOrDefault(item => item.Id == profileItem.Id)
             : null;
+
+    public void SendActiveWieldType()
+    {
+        var playerUpdatePacketUpdateActiveWieldType = new PlayerUpdatePacketUpdateActiveWieldType
+        {
+            Guid = Guid,
+            WieldType = GetWieldType()
+        };
+
+        SendTunneled(playerUpdatePacketUpdateActiveWieldType);
+    }
 
     public int GetWieldType()
     {
@@ -1018,22 +1326,6 @@ public sealed class Player : ClientPcData, IEntity
     {
         if (profileId != ActiveProfileId || (changedSlot != WeaponSlot && changedSlot != FlairShardSlot))
             return;
-
-        // Job switches reuse the cached attachment effect until the new weapon appears.
-        if (GetEquippedItem(WeaponSlot) is { } item
-            && _resourceManager.ClientItemDefinitions.TryGetValue(item.Definition, out var definition)
-            && GetAttachment(WeaponSlot) is { } attachment)
-        {
-            SendTunneledToVisible(new PlayerUpdatePacketEquipItemChange
-            {
-                Guid = Guid,
-                Id = item.Id,
-                Attachment = attachment,
-                ProfileId = ActiveProfileId,
-                ItemClassId = definition.Class,
-                WieldType = GetWieldType()
-            }, true);
-        }
 
         SendTunneledToVisible(GetWeaponFlairOverridePacket(), true);
     }
@@ -1217,6 +1509,7 @@ public sealed class Player : ClientPcData, IEntity
     private readonly ConcurrentDictionary<int, PlayerEffect> _effects = new();
     private int _appearanceEffectId;
     private int _scaleEffectId;
+    private float? _mountMovementSpeed;
 
     public int AddEffect(PlayerEffect effect)
     {
@@ -1280,29 +1573,45 @@ public sealed class Player : ClientPcData, IEntity
             StartWorldEffect(effect);
 
         if (effect.BuffIconId != 0)
-        {
-            var durationSeconds = effect.ExpiresAt is { } expiresAt
-                ? Math.Max(1, (int)(expiresAt - DateTimeOffset.UtcNow).TotalSeconds)
-                : 0;
-
-            SendTunneled(new ClientUpdatePacketAddEffectTag
-            {
-                TagId = effect.Id,
-                EffectTag = new EffectTag
-                {
-                    InstanceId = effect.Id,
-                    DefinitionId = effect.BuffDefinitionId,
-                    Duration = durationSeconds,
-                    StartTime = 0,
-                    StopTime = (uint)-durationSeconds
-                },
-                IconId = effect.BuffIconId,
-                NameId = effect.BuffNameId
-            });
-        }
+            SendEffectTag(effect);
 
         if (effect.MovementSpeedBonus != 0)
-            UpdateCharacterStats(CharacterStats.MaxMovementSpeed.Set(Stats[CharacterStatId.MaxMovementSpeed].Float + effect.MovementSpeedBonus));
+            RefreshMovementSpeed();
+    }
+
+    public bool RefreshEffect(int id, DateTimeOffset expiresAt)
+    {
+        if (!_effects.TryGetValue(id, out var effect))
+            return false;
+
+        effect.ExpiresAt = expiresAt;
+
+        if (effect.BuffIconId != 0)
+            SendEffectTag(effect);
+
+        return true;
+    }
+
+    private void SendEffectTag(PlayerEffect effect)
+    {
+        var durationSeconds = effect.ExpiresAt is { } expiresAt
+            ? Math.Max(1, (int)(expiresAt - DateTimeOffset.UtcNow).TotalSeconds)
+            : 0;
+
+        SendTunneled(new ClientUpdatePacketAddEffectTag
+        {
+            TagId = effect.Id,
+            EffectTag = new EffectTag
+            {
+                InstanceId = effect.Id,
+                DefinitionId = effect.BuffDefinitionId,
+                Duration = durationSeconds,
+                StartTime = 0,
+                StopTime = (uint)-durationSeconds
+            },
+            IconId = effect.BuffIconId,
+            NameId = effect.BuffNameId
+        });
     }
 
     private void UnapplyEffect(PlayerEffect effect)
@@ -1327,7 +1636,7 @@ public sealed class Player : ClientPcData, IEntity
             SendTunneled(new ClientUpdatePacketRemoveEffectTag { TagId = effect.Id });
 
         if (effect.MovementSpeedBonus != 0)
-            UpdateCharacterStats(CharacterStats.MaxMovementSpeed.Set(Stats[CharacterStatId.MaxMovementSpeed].Float - effect.MovementSpeedBonus));
+            RefreshMovementSpeed();
     }
 
     private void StartWorldEffect(PlayerEffect effect)
@@ -1512,6 +1821,12 @@ public sealed class Player : ClientPcData, IEntity
         }
     }
 
+    public void ClearObjectives()
+    {
+        SendTunneled(new ObjectiveTargetUpdatePacket { Active = false });
+        SendTunneled(new ObjectiveClientClearPacket { Unknown = Random.Shared.Next() });
+    }
+
     public void OnZoneChanged(IZone zone, Vector4 position, Quaternion rotation)
     {
         PlayerPet.RecallPet(remember: zone is not CombatZone);
@@ -1531,6 +1846,8 @@ public sealed class Player : ClientPcData, IEntity
 
     public void Dispose()
     {
+        Routines.CancelAll();
+
         PlayerPet.Dispose();
 
         RemoveFromVisibleEntities(false); // no need to notify self since we're DCing
@@ -1541,5 +1858,45 @@ public sealed class Player : ClientPcData, IEntity
         ZoneTile.Entities.Remove(Guid, out _);
         Zone.TryRemovePlayer(Guid);
         _zoneManager.EvictIfEmpty(Zone);
+    }
+
+    public sealed record InteractionMenu(ulong Guid, IReadOnlyDictionary<int, Action<Player>> Options);
+
+    public InteractionMenu? OpenInteractionMenu { get; set; }
+
+    private const int NpcInteractionIdBase = 1_000_000;
+
+    public void SendInteractionMenu(Npc npc, IReadOnlyList<NpcInteractionOption> options, IEnumerable<InteractionData>? npcInteractions = null)
+    {
+        var npcInteractionList = npcInteractions?.ToList() ?? [];
+        var usedIds = npcInteractionList.Select(interaction => interaction.Id).ToHashSet();
+
+        var interactions = new List<InteractionData>(options.Count);
+        var actions = new Dictionary<int, Action<Player>>(options.Count);
+        var nextId = NpcInteractionIdBase;
+
+        foreach (var option in options)
+        {
+            while (!usedIds.Add(nextId))
+                nextId++;
+
+            var id = nextId++;
+
+            interactions.Add(new InteractionData
+            {
+                Id = id,
+                IconId = option.IconId,
+                ButtonText = option.ButtonTextId,
+                TooltipId = option.TooltipId
+            });
+
+            actions[id] = option.Invoke;
+        }
+
+        interactions.AddRange(npcInteractionList);
+
+        OpenInteractionMenu = new InteractionMenu(npc.Guid, actions);
+
+        SendTunneled(InteractionMenuHelper.GetInteractionListPacket(npc.Guid, npc.Name, interactions));
     }
 }

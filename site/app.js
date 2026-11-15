@@ -2,6 +2,7 @@ const PAGE_SIZE = 80;
 
 const collectionMaps = [
   {
+    key: "briarwood",
     zoneId: 1,
     name: "Briarwood",
     imageUrl: "assets/maps/briarwood.webp",
@@ -12,6 +13,7 @@ const collectionMaps = [
     maxZ: 2560,
   },
   {
+    key: "blackspore",
     zoneId: 1,
     name: "Blackspore",
     imageUrl: "assets/maps/blackspore.webp",
@@ -22,6 +24,7 @@ const collectionMaps = [
     maxZ: 1664,
   },
   {
+    key: "stillwater",
     zoneId: 1,
     name: "Stillwater Crossing",
     imageUrl: "assets/maps/stillwater.webp",
@@ -38,7 +41,148 @@ const collectionMaps = [
     minZ: 512,
     maxZ: 1536,
   },
+  {
+    key: "nettleseed",
+    zoneId: 1,
+    name: "Nettleseed",
+    imageUrl: "assets/maps/central-wilds.webp",
+    pools: [
+      "nettleseed-sparkling-water",
+      "nettleseed-sparkling-water-rare",
+    ],
+    minX: -512,
+    maxX: 1408,
+    minZ: 0,
+    maxZ: 1920,
+    autoFitPlacements: true,
+  },
+  {
+    key: "merryvale",
+    zoneId: 1,
+    name: "Merry Vale",
+    imageUrl: "assets/maps/sanctuary.webp",
+    pools: [
+      "merryvale-sparkling-water",
+      "merryvale-sparkling-water-rare",
+    ],
+    minX: -512,
+    maxX: 1408,
+    minZ: 0,
+    maxZ: 1920,
+    autoFitPlacements: true,
+  },
+  {
+    key: "cobblestone",
+    zoneId: 1,
+    name: "Cobblestone Village",
+    imageUrl: "assets/maps/cobblestone-village.webp",
+    pools: [
+      "southern-wilds-flowers",
+      "southern-wilds-flowers-rare",
+      "southern-wilds-leaves",
+      "southern-wilds-leaves-rare",
+      "southern-wilds-robgoblin-junk",
+      "southern-wilds-robgoblin-junk-rare",
+    ],
+    minX: -2304,
+    maxX: -1536,
+    minZ: 0,
+    maxZ: 768,
+  },
+  {
+    key: "lakeshore",
+    zoneId: 1,
+    name: "Lakeshore",
+    imageUrl: "assets/maps/lakeshore.webp",
+    pools: [
+      "lakeshore-sparkling-water",
+      "lakeshore-sparkling-water-rare",
+      "lakeshore-flowers",
+      "lakeshore-flowers-rare",
+    ],
+    minX: -768,
+    maxX: 256,
+    minZ: -256,
+    maxZ: 512,
+    autoFitPlacements: true,
+  },
+  {
+    key: "seaside",
+    zoneId: 1,
+    name: "Seaside",
+    imageUrl: "assets/maps/seaside.webp",
+    pools: [
+      "seaside-shells",
+      "seaside-shells-rare",
+      "seaside-sparkling-water",
+      "seaside-sparkling-water-rare",
+    ],
+    minX: 512,
+    maxX: 2048,
+    minZ: -512,
+    maxZ: 768,
+    autoFitPlacements: true,
+  },
+  {
+    key: "snowhill",
+    zoneId: 1,
+    name: "Snowhill",
+    imageUrl: "assets/maps/snowhill.webp",
+    pools: [
+      "snowhill-flowers",
+      "snowhill-flowers-rare",
+      "snowhill-leaves",
+      "snowhill-leaves-rare",
+      "snowhill-sparkling-water",
+      "snowhill-sparkling-water-rare",
+    ],
+    minX: -256,
+    maxX: 896,
+    minZ: -1536,
+    maxZ: -512,
+    autoFitPlacements: true,
+  },
+  {
+    key: "sanctuary-central",
+    zoneId: 1,
+    name: "Sanctuary / Central Wilds",
+    imageUrl: "assets/maps/sanctuary-central.webp",
+    pools: [
+      "sanctuary-central-sparkling-water",
+      "sanctuary-central-sparkling-water-rare",
+      "sanctuary-central-flowers",
+      "sanctuary-central-flowers-rare",
+      "sanctuary-central-robgoblin-junk",
+      "sanctuary-central-robgoblin-junk-rare",
+    ],
+    minX: -512,
+    maxX: 1408,
+    minZ: 0,
+    maxZ: 1920,
+    autoFitPlacements: true,
+  },
+  {
+    key: "southern-wilds",
+    zoneId: 1,
+    name: "Southern Wilds",
+    imageUrl: "assets/maps/southern-wilds.webp",
+    pools: [
+      "southern-wilds-flowers",
+      "southern-wilds-flowers-rare",
+      "southern-wilds-leaves",
+      "southern-wilds-leaves-rare",
+      "southern-wilds-robgoblin-junk",
+      "southern-wilds-robgoblin-junk-rare",
+    ],
+    minX: -2560,
+    maxX: -1024,
+    minZ: -512,
+    maxZ: 1536,
+    autoFitPlacements: true,
+  },
 ];
+
+const collectionPoolKeys = [...new Set(collectionMaps.flatMap((map) => map.pools))].sort();
 
 const state = {
   models: [],
@@ -94,6 +238,11 @@ const elements = {
   volunteerPendingCount: document.querySelector("#volunteer-pending-count"),
   volunteerAcceptedCount: document.querySelector("#volunteer-accepted-count"),
   volunteerDeployedCount: document.querySelector("#volunteer-deployed-count"),
+  placementGapList: document.querySelector("#placement-gap-list"),
+  volunteerCommandHeading: document.querySelector("#volunteer-command-heading"),
+  volunteerCommandHelp: document.querySelector("#volunteer-command-help"),
+  volunteerPlaceCommand: document.querySelector("#volunteer-place-command"),
+  copyVolunteerCommand: document.querySelector("#copy-volunteer-command"),
   volunteerMap: document.querySelector("#volunteer-map"),
   volunteerMapHeading: document.querySelector("#coordinate-map-heading"),
   volunteerMapCaption: document.querySelector("#volunteer-map-caption"),
@@ -304,9 +453,15 @@ function renderAccount() {
 function populateVolunteerFilters() {
   const selectedZone = elements.volunteerZone.value;
   const selectedPool = elements.volunteerPool.value;
-  const zones = [...new Set(state.placements.map((placement) => placement.zoneId))]
+  const zones = [...new Set([
+    ...collectionMaps.map((map) => map.zoneId),
+    ...state.placements.map((placement) => placement.zoneId),
+  ])]
     .sort((left, right) => left - right);
-  const pools = [...new Set(state.placements.map((placement) => placement.pool))].sort();
+  const pools = [...new Set([
+    ...collectionPoolKeys,
+    ...state.placements.map((placement) => placement.pool),
+  ])].sort();
 
   elements.volunteerZone.innerHTML = '<option value="">All zones</option>';
   zones.forEach((zoneId) => elements.volunteerZone.add(new Option(`Zone ${zoneId}`, zoneId)));
@@ -339,6 +494,8 @@ function renderVolunteerPlacements() {
     .filter((placement) => placement.status === "accepted").length.toLocaleString();
   elements.volunteerDeployedCount.textContent = state.placements
     .filter((placement) => placement.status === "deployed").length.toLocaleString();
+  renderPlacementGaps();
+  renderVolunteerCommand();
   elements.volunteerPlacements.replaceChildren();
 
   if (!placements.length) {
@@ -376,6 +533,67 @@ function renderVolunteerPlacements() {
   renderVolunteerMap();
 }
 
+function renderPlacementGaps() {
+  if (!elements.placementGapList) {
+    return;
+  }
+
+  const counts = new Map(collectionPoolKeys.map((pool) => [pool, 0]));
+  state.placements.forEach((placement) => {
+    if (counts.has(placement.pool)) {
+      counts.set(placement.pool, counts.get(placement.pool) + 1);
+    }
+  });
+
+  const gaps = [...counts.entries()]
+    .filter(([, count]) => count === 0 || count < 10)
+    .sort(([leftPool, leftCount], [rightPool, rightCount]) =>
+      leftCount - rightCount || leftPool.localeCompare(rightPool))
+    .slice(0, 14);
+
+  elements.placementGapList.replaceChildren();
+  if (!gaps.length) {
+    const done = document.createElement("span");
+    done.className = "placement-gap-chip healthy";
+    done.textContent = "All live pools have 10+ placements";
+    elements.placementGapList.append(done);
+    return;
+  }
+
+  gaps.forEach(([pool, count]) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = `placement-gap-chip ${count === 0 ? "empty" : "low"}`;
+    chip.textContent = `${pool}: ${count}`;
+    chip.addEventListener("click", () => {
+      elements.volunteerPool.value = pool;
+      elements.volunteerZone.value = "1";
+      applyVolunteerFilters();
+    });
+    elements.placementGapList.append(chip);
+  });
+}
+
+function renderVolunteerCommand() {
+  const pool = elements.volunteerPool.value;
+  if (!pool) {
+    elements.volunteerCommandHeading.textContent = "Submit from your position";
+    elements.volunteerCommandHelp.textContent = "Select a collection pool to get its exact placement command.";
+    elements.volunteerPlaceCommand.textContent = "!volunteer place [pool] [optional note]";
+    elements.copyVolunteerCommand.disabled = true;
+    return;
+  }
+
+  const map = collectionMaps.find((candidate) => candidate.pools.includes(pool));
+  elements.volunteerCommandHeading.textContent = map
+    ? `Place a ${map.name} collection node`
+    : "Place this collection node";
+  elements.volunteerCommandHelp.textContent =
+    "Stand where the node should appear and run this command. You can add a short landmark note after the pool key.";
+  elements.volunteerPlaceCommand.textContent = `!volunteer place ${pool}`;
+  elements.copyVolunteerCommand.disabled = false;
+}
+
 function renderVolunteerMap() {
   const svg = elements.volunteerMap;
   svg.replaceChildren();
@@ -384,6 +602,14 @@ function renderVolunteerMap() {
   svg.classList.remove("regional-map");
   elements.volunteerMapHeading.textContent = "X/Z placement plot";
   const zones = [...new Set(state.filteredPlacements.map((placement) => placement.zoneId))];
+  const selectedZone = Number(elements.volunteerZone.value);
+  const selectedPool = elements.volunteerPool.value;
+  const selectedMap = chooseCollectionMapForSelection(selectedZone, selectedPool);
+
+  if (!state.filteredPlacements.length && selectedMap) {
+    renderRegionalVolunteerMap(svg, [], selectedMap);
+    return;
+  }
 
   if (zones.length !== 1 || !state.filteredPlacements.length) {
     elements.volunteerMapCaption.textContent = zones.length > 1
@@ -400,11 +626,7 @@ function renderVolunteerMap() {
   }
 
   const placements = state.filteredPlacements;
-  const regionalMap = collectionMaps.find((map) =>
-    map.zoneId === zones[0] && placements.every((placement) =>
-      map.pools.includes(placement.pool) &&
-      placement.x >= map.minX && placement.x <= map.maxX &&
-      placement.z >= map.minZ && placement.z <= map.maxZ));
+  const regionalMap = chooseCollectionMap(zones[0], placements, selectedPool);
 
   if (regionalMap) {
     renderRegionalVolunteerMap(svg, placements, regionalMap);
@@ -435,27 +657,17 @@ function renderVolunteerMap() {
   svg.append(background);
 
   placements.forEach((placement) => {
-    const point = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     const x = padding + ((placement.x - minX + (rangeX - (maxX - minX)) / 2) / rangeX) * plotWidth;
     const y = padding + plotHeight -
       ((placement.z - minZ + (rangeZ - (maxZ - minZ)) / 2) / rangeZ) * plotHeight;
-    point.setAttribute("cx", x);
-    point.setAttribute("cy", y);
-    point.setAttribute("r", "7");
-    point.setAttribute("class", `map-point ${placement.status}`);
-    point.setAttribute("tabindex", "0");
-    const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-    title.textContent = `#${placement.id} ${placement.pool} by ${placement.submittedBy}`;
-    point.append(title);
-    svg.append(point);
+    svg.append(createMapPoint(placement, x, y, "7"));
   });
 }
 
 function renderRegionalVolunteerMap(svg, placements, regionalMap) {
   const width = 800;
-  const height = width *
-    (regionalMap.maxZ - regionalMap.minZ) /
-    (regionalMap.maxX - regionalMap.minX);
+  const bounds = getProjectionBounds(regionalMap, placements);
+  const height = width * (bounds.maxZ - bounds.minZ) / (bounds.maxX - bounds.minX);
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
   svg.style.aspectRatio = `${width} / ${height}`;
   svg.classList.add("regional-map");
@@ -471,22 +683,162 @@ function renderRegionalVolunteerMap(svg, placements, regionalMap) {
   background.setAttribute("preserveAspectRatio", "none");
   svg.append(background);
 
+  const inBounds = [];
+  const outOfBounds = [];
   placements.forEach((placement) => {
-    const point = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    const x = (placement.x - regionalMap.minX) /
-      (regionalMap.maxX - regionalMap.minX) * width;
-    const y = (placement.z - regionalMap.minZ) /
-      (regionalMap.maxZ - regionalMap.minZ) * height;
-    point.setAttribute("cx", x);
-    point.setAttribute("cy", y);
-    point.setAttribute("r", "8");
-    point.setAttribute("class", `map-point ${placement.status}`);
-    point.setAttribute("tabindex", "0");
-    const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-    title.textContent = `#${placement.id} ${placement.pool} by ${placement.submittedBy}`;
-    point.append(title);
-    svg.append(point);
+    if (isPlacementInsideBounds(placement, bounds)) {
+      inBounds.push(placement);
+    } else {
+      outOfBounds.push(placement);
+    }
   });
+
+  inBounds.forEach((placement) => {
+    const { x, y } = projectToMap(placement, bounds, width, height);
+    svg.append(createMapPoint(placement, x, y, "8"));
+  });
+
+  if (outOfBounds.length) {
+    renderOutlierRibbon(svg, outOfBounds, width, height);
+    elements.volunteerMapCaption.textContent +=
+      `; ${outOfBounds.length} outside current map bounds`;
+  }
+
+  if (!placements.length) {
+    renderMapEmptyState(svg, width, height, "No submissions yet");
+  }
+
+  if (regionalMap.autoFitPlacements && placements.length) {
+    elements.volunteerMapCaption.textContent +=
+      "; auto-fit view";
+  }
+}
+
+function chooseCollectionMap(zoneId, placements, selectedPool = "") {
+  if (selectedPool) {
+    const selected = chooseCollectionMapForSelection(zoneId, selectedPool);
+    if (selected) {
+      return selected;
+    }
+  }
+
+  const candidates = collectionMaps
+    .filter((map) => map.zoneId === zoneId)
+    .map((map) => {
+      const poolMatches = placements.filter((placement) => map.pools.includes(placement.pool));
+      const bounds = getProjectionBounds(map, poolMatches);
+      const inBounds = poolMatches.filter((placement) => isPlacementInsideBounds(placement, bounds));
+      return {
+        map,
+        poolMatchCount: poolMatches.length,
+        inBoundsCount: inBounds.length,
+      };
+    })
+    .filter((candidate) => candidate.poolMatchCount > 0)
+    .sort((left, right) =>
+      right.inBoundsCount - left.inBoundsCount ||
+      right.poolMatchCount - left.poolMatchCount);
+
+  return candidates[0]?.map ?? null;
+}
+
+function chooseCollectionMapForSelection(zoneId, pool) {
+  if (!pool) {
+    return null;
+  }
+  return collectionMaps.find((map) =>
+    (!zoneId || map.zoneId === zoneId) &&
+    map.pools.includes(pool)) ?? null;
+}
+
+function getProjectionBounds(map, placements) {
+  if (!map.autoFitPlacements || !placements.length) {
+    return {
+      minX: map.minX,
+      maxX: map.maxX,
+      minZ: map.minZ,
+      maxZ: map.maxZ,
+    };
+  }
+
+  const xs = placements.map((placement) => placement.x);
+  const zs = placements.map((placement) => placement.z);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minZ = Math.min(...zs);
+  const maxZ = Math.max(...zs);
+  const xRange = Math.max(maxX - minX, 96);
+  const zRange = Math.max(maxZ - minZ, 96);
+  const paddingX = Math.max(xRange * 0.16, 48);
+  const paddingZ = Math.max(zRange * 0.16, 48);
+
+  return {
+    minX: minX - paddingX,
+    maxX: maxX + paddingX,
+    minZ: minZ - paddingZ,
+    maxZ: maxZ + paddingZ,
+  };
+}
+
+function isPlacementInsideBounds(placement, bounds) {
+  return (
+    placement.x >= bounds.minX &&
+    placement.x <= bounds.maxX &&
+    placement.z >= bounds.minZ &&
+    placement.z <= bounds.maxZ
+  );
+}
+
+function projectToMap(placement, bounds, width, height) {
+  return {
+    x: (placement.x - bounds.minX) / (bounds.maxX - bounds.minX) * width,
+    y: (placement.z - bounds.minZ) / (bounds.maxZ - bounds.minZ) * height,
+  };
+}
+
+function renderMapEmptyState(svg, width, height, text) {
+  const message = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  message.setAttribute("x", width / 2);
+  message.setAttribute("y", height / 2);
+  message.setAttribute("text-anchor", "middle");
+  message.setAttribute("class", "map-empty");
+  message.textContent = text;
+  svg.append(message);
+}
+
+function createMapPoint(placement, x, y, radius) {
+  const point = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  point.setAttribute("cx", x);
+  point.setAttribute("cy", y);
+  point.setAttribute("r", radius);
+  point.setAttribute("class", `map-point ${placement.status}`);
+  point.setAttribute("tabindex", "0");
+  const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+  title.textContent =
+    `#${placement.id} ${placement.pool} (${placement.x.toFixed(1)}, ${placement.y.toFixed(1)}, ${placement.z.toFixed(1)}) by ${placement.submittedBy}`;
+  point.append(title);
+  return point;
+}
+
+function renderOutlierRibbon(svg, placements, width, height) {
+  const ribbon = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  ribbon.setAttribute("class", "map-outlier-ribbon");
+
+  const background = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  background.setAttribute("x", "12");
+  background.setAttribute("y", height - 46);
+  background.setAttribute("width", Math.min(width - 24, 560));
+  background.setAttribute("height", "34");
+  background.setAttribute("rx", "4");
+  ribbon.append(background);
+
+  const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  text.setAttribute("x", "28");
+  text.setAttribute("y", height - 24);
+  text.textContent = `${placements.length} point${placements.length === 1 ? "" : "s"} outside this map crop; check coordinates in the table.`;
+  ribbon.append(text);
+
+  svg.append(ribbon);
 }
 
 async function loadVolunteerPlacements() {
@@ -875,6 +1227,9 @@ elements.spawnName.addEventListener("input", updateSpawnCommand);
 elements.spawnGroup.addEventListener("input", updateSpawnCommand);
 elements.copySpawn.addEventListener("click", () =>
   copyText(elements.spawnCommand.textContent, "Spawn command copied.")
+);
+elements.copyVolunteerCommand.addEventListener("click", () =>
+  copyText(elements.volunteerPlaceCommand.textContent, "Placement command copied.")
 );
 elements.accountLogin.addEventListener("click", openLogin);
 elements.accountLogout.addEventListener("click", logout);

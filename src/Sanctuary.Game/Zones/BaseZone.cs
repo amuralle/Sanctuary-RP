@@ -9,22 +9,30 @@ using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
 
+using DotRecast.Detour;
+
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using Sanctuary.Core.Collections;
+using Sanctuary.Core.RoleplayMiniatures;
 using Sanctuary.Core.Extensions;
+using Sanctuary.Core.Helpers;
 using Sanctuary.Core.IO;
+using Sanctuary.Database;
 using Sanctuary.Game.Entities;
 using Sanctuary.Game.Helpers;
+using Sanctuary.Game.Interactions;
+using Sanctuary.Game.Pathing;
+using Sanctuary.Game.Quests;
 using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Game.Resources.Definitions.Zones;
+using Sanctuary.Game.Routines;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
 using Sanctuary.Scripting;
 using Sanctuary.UdpLibrary;
-using Sanctuary.Game.Pathfinding;
-using Sanctuary.Game.Terrain;
 
 namespace Sanctuary.Game.Zones;
 
@@ -33,17 +41,21 @@ public abstract class BaseZone : IZone, IDisposable
 {
     private readonly ILogger _logger;
     protected readonly IResourceManager _resourceManager;
+    private readonly RoleplayMiniatureStore? _roleplayMiniatureStore;
+    protected readonly IDbContextFactory<DatabaseContext> _dbContextFactory;
     private readonly IZoneManager _zoneManager;
     private readonly IScriptManager _scriptManager;
+    private readonly IQuestManager _questManager;
     private readonly ScriptRuntime _scriptRuntime;
     private readonly BaseZoneDefinition _zoneDefinition;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
 
     private const int VisibleTileRadius = 2;
     private readonly Dictionary<int, ZoneTile> _tiles;
+    protected readonly ZoneEnvironmentDefinition? _zoneEnvironment;
 
     private readonly object _npcGuidLock = new();
-    private ulong _nextNpcGuid = NpcBaseGuid;
+    private ulong _nextNpcCounter = FirstNpcCounter;
 
     private readonly ConcurrentDictionary<ulong, Npc> _npcs = new();
     private readonly ConcurrentDictionary<ulong, Player> _players = new();
@@ -62,8 +74,9 @@ public abstract class BaseZone : IZone, IDisposable
     private const float TickRate = 1000f / FrameRate;
 
     public float TickDeltaSeconds => 1f / FrameRate;
+    public TimeSpan TickDelta => TimeSpan.FromMilliseconds(TickRate);
 
-    private const ulong NpcBaseGuid = 100_000_000_000u;
+    private const ulong FirstNpcCounter = GuidHelper.MaxFixedNpcCounter + 1;
 
     private readonly record struct CollectionNodePoolRefill(string PoolKey, int CollectedHardPointId);
 
@@ -78,6 +91,8 @@ public abstract class BaseZone : IZone, IDisposable
     public string Name => _zoneDefinition.Name;
     public ILogger Logger => _logger;
 
+    public RoutineManager Routines { get; }
+
     public Vector4 SpawnPosition => _zoneDefinition.SpawnPosition;
     public Quaternion SpawnRotation => _zoneDefinition.SpawnRotation;
 
@@ -86,39 +101,49 @@ public abstract class BaseZone : IZone, IDisposable
     public IEnumerable<Npc> Npcs => _npcs.Values;
     public IEnumerable<Player> Players => _players.Values;
 
+    public ulong ReserveNpcGuid() => GetNpcGuid(null);
+
     public bool IsEmpty => _players.IsEmpty;
 
     public IScriptManager ScriptManager => _scriptManager;
     public ScriptRuntime ScriptRuntime => _scriptRuntime;
 
-    private readonly TerrainMesh? _terrainMesh;
-    private readonly NavMeshPathfinder? _navMeshPathfinder;
-    private readonly NavMeshPathfinder? _clientNavMeshPathfinder;
-
-    private const float RoadRouteMinDistance = 50f;
-    private const float RouteReachDistance = 1f;
+    public DtNavMeshQuery? NavMeshQuery { get; }
+    public IDtQueryFilter NavMeshFilter { get; } = CreateNavMeshFilter(NavMeshPolyFlags.Walk);
+    public IDtQueryFilter FollowerNavMeshFilter { get; } = CreateNavMeshFilter(NavMeshPolyFlags.Walk | NavMeshPolyFlags.Swim | NavMeshPolyFlags.Outside);
 
     public ulong? OwnerId { get; init; }
 
     private bool _started = false;
 
-    public Pathfinder<MapNode>? Pathfinder { get; }
 
     protected BaseZone(BaseZoneDefinition zoneDefinition, IServiceProvider serviceProvider)
     {
         _zoneDefinition = zoneDefinition;
         _resourceManager = serviceProvider.GetRequiredService<IResourceManager>();
+        _roleplayMiniatureStore = serviceProvider.GetService<RoleplayMiniatureStore>();
+        _dbContextFactory = serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>();
         _zoneManager = serviceProvider.GetRequiredService<IZoneManager>();
 
         var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
 
         _logger = loggerFactory.CreateLogger($"Zone {Name} ({Id})");
 
+        Routines = new RoutineManager(_logger, TickDelta);
+        // TODO: Start trade maintenance on the zone's first invite and cancel it after its last
+        // session closes, if the idle once-a-second sweep ever shows up in profiling.
+        if (serviceProvider.GetService<TradeManager>() is { } trades)
+            Routines.SetRoutine("trade-maintenance",
+                new PeriodicRoutine(new InstantRoutine(() => trades.Sweep(this)), 1));
+
         _scriptManager = serviceProvider.GetRequiredService<IScriptManager>();
+        _questManager = serviceProvider.GetRequiredService<IQuestManager>();
         _scriptRuntime = new ScriptRuntime(_logger);
 
         foreach (var script in _zoneDefinition.Scripts ?? [])
             _scripts.TryAdd(script);
+
+        _resourceManager.ZoneEnvironments.TryGetValue(Name, out _zoneEnvironment);
 
         _tiles = GenerateTiles();
 
@@ -128,97 +153,17 @@ public abstract class BaseZone : IZone, IDisposable
             ArgumentNullException.ThrowIfNull(tile.Value.VisibleTiles);
         }
 
-        // Just in case we don't actually have the `.map` file for a particular zone.
-        if (_resourceManager.Maps.TryGetValue(Name, out var mapGraph))
-            Pathfinder = new Pathfinder<MapNode>(mapGraph.Nodes, _logger);
-
-        if (_resourceManager.Terrains.TryGetValue(Name, out var terrainMesh))
-            _terrainMesh = terrainMesh;
-
-        if (_resourceManager.NavMeshes.TryGetValue(Name, out var navMesh))
-        {
-            _navMeshPathfinder = new NavMeshPathfinder(navMesh);
-            _clientNavMeshPathfinder = new NavMeshPathfinder(navMesh);
-        }
+        if (_resourceManager.NavMeshes.TryGetNavMesh(Name, out var navMesh))
+            NavMeshQuery = new DtNavMeshQuery(navMesh);
     }
 
-    public bool HasGroundData => _terrainMesh is not null;
+    public virtual IReadOnlyList<NpcInteractionOption> GetInteractionOptions(Player player, Npc npc) => [];
 
-    public bool TryGetGroundHeight(float x, float z, float fromY, float maxDrop, out float height)
-    {
-        if (_terrainMesh is not null)
-            return _terrainMesh.TryGetGroundHeight(x, z, fromY, maxDrop, out height);
+    public virtual NotificationInfo? GetQuestBadge(Player player, Npc npc) => null;
 
-        height = default;
-        return false;
-    }
+    public virtual bool IsHiddenByQuest(Player player, Npc npc) => false;
 
-    public bool IsWalkable(Vector3 start, Vector3 goal, float maxStepUp, float maxStepDown, out float goalHeight)
-    {
-        if (_terrainMesh is not null)
-            return _terrainMesh.IsWalkable(start, goal, maxStepUp, maxStepDown, out goalHeight);
-
-        goalHeight = goal.Y;
-        return true;
-    }
-
-    public bool TryGetWalkableGoal(Vector3 start, Vector3 goal, float maxStepUp, float maxStepDown, out Vector3 walkableGoal)
-    {
-        walkableGoal = goal;
-
-        if (!IsWalkable(start, goal, maxStepUp, maxStepDown, out var goalHeight))
-            return false;
-
-        walkableGoal.Y = goalHeight;
-        return true;
-    }
-
-    public Vector3 GetGroundPosition(Vector3 position, float maxStepUp, float maxDrop)
-    {
-        if (TryGetGroundHeight(position.X, position.Z, position.Y + maxStepUp, maxDrop, out var groundHeight))
-            position.Y = groundHeight;
-
-        return position;
-    }
-
-    public bool HasNavMesh => _navMeshPathfinder is not null;
-
-    public bool TryFindNavMeshPath(Vector3 start, Vector3 goal, Queue<Vector3> waypoints) =>
-        _navMeshPathfinder is not null && _navMeshPathfinder.TryFindPath(start, goal, waypoints);
-
-    public bool TryFindClientNavMeshPath(Vector3 start, Vector3 goal, Queue<Vector3> waypoints) =>
-        _clientNavMeshPathfinder is not null && _clientNavMeshPathfinder.TryFindPath(start, goal, waypoints);
-
-    public bool TryFindRoute(Vector3 start, Vector3 goal, Queue<Vector3> waypoints)
-    {
-        if (Pathfinder is null || start.DistanceSquaredXZ(goal) < RoadRouteMinDistance * RoadRouteMinDistance)
-            return TryFindNavMeshPath(start, goal, waypoints);
-
-        var roadNodes = Pathfinder.FindPath(start, goal);
-
-        if (roadNodes.Count == 0 || !TryFindNavMeshPath(start, roadNodes[0].Position, waypoints)
-            || waypoints.Last().DistanceSquaredXZ(roadNodes[0].Position) > RouteReachDistance * RouteReachDistance)
-        {
-            return TryFindNavMeshPath(start, goal, waypoints);
-        }
-
-        for (var node = 1; node < roadNodes.Count; node++)
-            waypoints.Enqueue(roadNodes[node].Position);
-
-        var legWaypoints = new Queue<Vector3>();
-
-        if (TryFindNavMeshPath(roadNodes[^1].Position, goal, legWaypoints))
-        {
-            foreach (var waypoint in legWaypoints)
-                waypoints.Enqueue(waypoint);
-        }
-
-        return true;
-    }
-
-    public bool TryFindReachableRoute(Vector3 start, Vector3 goal, Queue<Vector3> waypoints, bool followRoads) =>
-        (followRoads ? TryFindRoute(start, goal, waypoints) : TryFindNavMeshPath(start, goal, waypoints))
-        && waypoints.Last().DistanceSquaredXZ(goal) <= RouteReachDistance * RouteReachDistance;
+    public virtual int GetQuestEffectId(Player player, Npc npc) => 0;
 
     #region Events
 
@@ -229,8 +174,10 @@ public abstract class BaseZone : IZone, IDisposable
 
         _started = true;
 
+        SpawnZoneNpcs();
         GetOrCreateScriptContext().FireEvent("start");
         ActivateCollectionNodePools();
+        RestoreRoleplayMiniatures();
         CreateNpcConversationGroups();
 
         _updateEveryTickTask = Task.Factory.StartNew(UpdateEveryTickAsync, _cancellationTokenSource.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
@@ -286,7 +233,11 @@ public abstract class BaseZone : IZone, IDisposable
     {
         SendQuickChatData(player);
 
+        player.SendTunneled(HousingHelper.GetInstanceList(_resourceManager, _dbContextFactory, player));
+
         SendUpdateStat(player);
+
+        player.RefreshEquipmentGlide();
 
         var clientUpdatePacketHitpoints = new ClientUpdatePacketHitpoints
         {
@@ -304,13 +255,7 @@ public abstract class BaseZone : IZone, IDisposable
 
         player.SendTunneled(clientUpdatePacketMana);
 
-        var playerUpdatePacketUpdateActiveWieldType = new PlayerUpdatePacketUpdateActiveWieldType
-        {
-            Guid = player.Guid,
-            WieldType = player.GetWieldType()
-        };
-
-        player.SendTunneled(playerUpdatePacketUpdateActiveWieldType);
+        player.SendActiveWieldType();
 
         SendGuildData(player);
 
@@ -327,6 +272,8 @@ public abstract class BaseZone : IZone, IDisposable
 
         player.SendTunneled(playerUpdatePacketEffectTagCompositeEffectsEnable);
 
+        _questManager.SendActiveObjectives(player);
+
         var packetZoneDoneSendingInitialData = new PacketZoneDoneSendingInitialData();
 
         player.SendTunneled(packetZoneDoneSendingInitialData);
@@ -339,6 +286,7 @@ public abstract class BaseZone : IZone, IDisposable
         SendIgnoreList(player);
 
         UpdateFriendStatus(player);
+        UpdateFriendLocality(player);
     }
 
     public virtual void OnClientFinishedLoading(Player player)
@@ -364,7 +312,7 @@ public abstract class BaseZone : IZone, IDisposable
         clientUpdatePacketUpdateStat.Stats.AddRange(
         [
             new CharacterStat(CharacterStatId.MaxHealth, 2500),
-            new CharacterStat(CharacterStatId.MaxMovementSpeed, 8f),
+            player.Stats[CharacterStatId.MaxMovementSpeed],
             new CharacterStat(CharacterStatId.WeaponRange, 5f),
             new CharacterStat(CharacterStatId.HitPointRegen, 25),
             new CharacterStat(CharacterStatId.MaxMana, 100),
@@ -483,7 +431,9 @@ public abstract class BaseZone : IZone, IDisposable
 
         var referenceDataPacketItemCategoryDefinitions = new ReferenceDataPacketItemCategoryDefinitions();
 
-        referenceDataPacketItemCategoryDefinitions.ItemCategories = _resourceManager.ItemCategories.ToDictionary();
+        referenceDataPacketItemCategoryDefinitions.ItemCategories = _resourceManager.ItemCategories
+            .OrderBy(itemCategory => itemCategory.Value.Unknown)
+            .ToDictionary();
         referenceDataPacketItemCategoryDefinitions.ItemCategoryGroups = _resourceManager.ItemCategoryGroups.ToDictionary();
 
         player.SendTunneled(referenceDataPacketItemCategoryDefinitions);
@@ -510,7 +460,10 @@ public abstract class BaseZone : IZone, IDisposable
     {
         var coinStoreItemListPacket = new CoinStoreItemListPacket();
 
-        coinStoreItemListPacket.StaticItems = _resourceManager.CoinStoreItems.ToDictionary();
+        coinStoreItemListPacket.StaticItems = _resourceManager.CoinStoreItems.Values
+            .OrderBy(coinStoreItem => coinStoreItem.Id % ItemDefinitionHelper.CommunityColourIdStep)
+            .ThenBy(coinStoreItem => coinStoreItem.Id)
+            .ToDictionary(coinStoreItem => coinStoreItem.Id);
 
         player.SendTunneled(coinStoreItemListPacket);
     }
@@ -631,13 +584,27 @@ public abstract class BaseZone : IZone, IDisposable
             packetInGamePurchaseStoreBundles.Store.DescriptionId = mainStore.DescriptionId;
             packetInGamePurchaseStoreBundles.Store.Image = mainStore.Image;
 
-            foreach (var storeBundle in mainStore.Bundles.Values)
+            var communityColourBundles = mainStore.Bundles.Values
+                .Where(storeBundle => storeBundle.Id >= ItemDefinitionHelper.CommunityColourIdStep)
+                .ToLookup(storeBundle => storeBundle.Id % ItemDefinitionHelper.CommunityColourIdStep);
+
+            foreach (var storeBundle in mainStore.Bundles.Values
+                .Where(storeBundle => storeBundle.Id < ItemDefinitionHelper.CommunityColourIdStep)
+                .SelectMany(storeBundle => communityColourBundles[storeBundle.Id].Prepend(storeBundle)))
             {
                 var valid = storeBundle.Entries.All(x => _resourceManager.ClientItemDefinitions.ContainsKey(x.MarketingItemId));
 
                 if (valid)
                     packetInGamePurchaseStoreBundles.Store.Bundles.Add(storeBundle.Id, storeBundle);
             }
+
+            var storeBundleItemDefinitions = packetInGamePurchaseStoreBundles.Store.Bundles.Values
+                .SelectMany(storeBundle => storeBundle.Entries)
+                .Select(entry => entry.MarketingItemId)
+                .Distinct()
+                .Select(marketingItemId => _resourceManager.ClientItemDefinitions[marketingItemId]);
+
+            ItemDefinitionHelper.SendItemDefinitions(player, _resourceManager, storeBundleItemDefinitions);
 
             player.SendTunneled(packetInGamePurchaseStoreBundles);
 
@@ -651,6 +618,9 @@ public abstract class BaseZone : IZone, IDisposable
 
     private void SendFriendList(Player player)
     {
+        foreach (var friend in player.Friends)
+            SetFriendLocality(friend, _zoneManager.TryGetPlayer(friend.Guid, out var friendPlayer) && friendPlayer.Zone == _zoneManager.StartingZone);
+
         var friendListPacket = new FriendListPacket();
 
         friendListPacket.Friends = player.Friends;
@@ -665,6 +635,33 @@ public abstract class BaseZone : IZone, IDisposable
         ignoreListPacket.Ignores = player.Ignores;
 
         player.SendTunneled(ignoreListPacket);
+    }
+
+    private void UpdateFriendLocality(Player player)
+    {
+        var isLocal = this == _zoneManager.StartingZone;
+
+        foreach (var friend in player.Friends)
+        {
+            if (!_zoneManager.TryGetPlayer(friend.Guid, out var friendPlayer))
+                continue;
+
+            var otherFriend = friendPlayer.Friends.FirstOrDefault(x => x.Guid == player.Guid);
+
+            if (otherFriend is null || otherFriend.IsLocal == isLocal)
+                continue;
+
+            SetFriendLocality(otherFriend, isLocal);
+
+            friendPlayer.SendTunneled(new FriendListPacket { Friends = friendPlayer.Friends });
+        }
+    }
+
+    private static void SetFriendLocality(FriendData friend, bool isLocal)
+    {
+        friend.IsLocal = isLocal;
+        friend.IsInStaticZone = isLocal;
+        friend.InEncounter = !isLocal;
     }
 
     private void UpdateFriendStatus(Player player)
@@ -752,12 +749,29 @@ public abstract class BaseZone : IZone, IDisposable
 
     #region Scripting API
 
+    private void SpawnZoneNpcs()
+    {
+        if (!_resourceManager.ZoneNpcs.TryGetValue(Name, out var zoneNpcs))
+            return;
+
+        foreach (var spawn in zoneNpcs.Spawns)
+            TrySpawnNpc(spawn.NpcId, GuidHelper.GetNpcGuid((ulong)spawn.NpcId, GuidHelper.OpenWorldInstanceId), spawn.Position.X, spawn.Position.Y, spawn.Position.Z, spawn.Heading, 0f, 0f, out _);
+    }
+
     public bool TrySpawnNpc(int npcId, ulong? npcGuid, float x, float y, float z, float heading, float pitch, float roll, [MaybeNullWhen(false)] out IScriptableNpc npc)
     {
         npc = null;
 
         if (npcGuid.HasValue)
         {
+            if (!GuidHelper.IsFixedNpcGuid(npcGuid.Value))
+            {
+                _logger.LogWarning("Failed to spawn NPC {NpcId} with GUID {NpcGuid}: not a fixed NPC GUID.", npcId, npcGuid.Value);
+                return false;
+            }
+
+            npcGuid = GetNpcGuid(npcGuid);
+
             if (_npcs.ContainsKey(npcGuid.Value))
             {
                 _logger.LogWarning("Failed to spawn NPC {NpcId} with GUID {NpcGuid}: GUID already exists.", npcId, npcGuid.Value);
@@ -786,7 +800,7 @@ public abstract class BaseZone : IZone, IDisposable
 
         spawnedNpc.UpdatePosition(position, rotation);
 
-        if (_resourceManager.NpcMovements.TryGetForNpc(spawnedNpc.Guid, definition.ModelFileName, out var npcMovementDefinition))
+        if (_resourceManager.NpcMovements.TryGetForNpc(definition.Id, definition.ModelFileName, out var npcMovementDefinition))
             spawnedNpc.MovementController = new NpcMovementController(spawnedNpc, npcMovementDefinition);
 
         if (_resourceManager.NpcAmbient.TryGetForModel(definition.ModelFileName, out var npcAmbientDefinition))
@@ -876,6 +890,7 @@ public abstract class BaseZone : IZone, IDisposable
             ? new CollectionCoin(this, coinDefinition) { Guid = npcGuid }
             : new Npc(this) { Guid = npcGuid };
 
+        npc.DefinitionId = definition.Id;
         npc.NameId = definition.NameId;
         npc.Name = definition.Name;
         npc.ModelId = definition.ModelId;
@@ -919,7 +934,12 @@ public abstract class BaseZone : IZone, IDisposable
             npc.Notification = Sanctuary.Game.Helpers.InteractionMenuHelper.GetNotification(npc.Guid, definition.Notification);
 
         foreach (var notification in definition.Notifications)
+        {
+            if (notification.NotificationType == QuestManager.QuestBadgeNotificationType)
+                continue;
+
             npc.Notifications.Add(Sanctuary.Game.Helpers.InteractionMenuHelper.GetNotification(npc.Guid, notification));
+        }
 
         if (!TryRegisterEntity(_npcs, npc))
         {
@@ -1227,7 +1247,6 @@ public abstract class BaseZone : IZone, IDisposable
             anchor.IsInteractable = false;
             anchor.InteractRange = 0;
             anchor.CursorId = 0;
-            anchor.Static = true;
             anchor.Visible = true;
             anchor.UpdatePosition(spawnDefinition.SpawnPosition, spawnDefinition.SpawnRotation);
             node.AddEffectAnchor(anchor);
@@ -1349,8 +1368,6 @@ public abstract class BaseZone : IZone, IDisposable
                 InteractRange = 15,
                 IsInteractable = true,
                 Speed = RoleplayMiniatureRules.MovementSpeed,
-                WaypointTolerance = RoleplayMiniatureRules.WaypointTolerance,
-                Static = false,
                 Visible = true
             };
 
@@ -1366,6 +1383,7 @@ public abstract class BaseZone : IZone, IDisposable
             entity.UpdatePosition(owner.Position, owner.Rotation);
             _roleplayMiniatureSpawnTimes[owner.Guid] = now;
             miniature = ToRoleplayMiniatureStatus(entity);
+            SaveRoleplayMiniatures();
             return RoleplayMiniatureCreateResult.Success;
         }
     }
@@ -1386,6 +1404,7 @@ public abstract class BaseZone : IZone, IDisposable
 
             miniature = ToRoleplayMiniatureStatus(entity);
             entity.DisposeFromScene();
+            SaveRoleplayMiniatures();
             return true;
         }
     }
@@ -1453,7 +1472,14 @@ public abstract class BaseZone : IZone, IDisposable
 
             _roleplayMiniatureMovementTimes[actorGuid] = now;
             miniature = ToRoleplayMiniatureStatus(entity);
-            entity.MoveTo(destination, direct, forceRecompute: true, arrivalRotation);
+            if (!entity.TryMoveTo(destination, direct, allowPartial: false, arrivalRotation))
+                return RoleplayMiniatureMoveResult.TooFar;
+            miniature = ToRoleplayMiniatureStatus(entity) with
+            {
+                Position = new Vector4(destination, 1f),
+                Rotation = arrivalRotation
+            };
+            SaveRoleplayMiniatures([miniature]);
             return RoleplayMiniatureMoveResult.Success;
         }
     }
@@ -1474,6 +1500,7 @@ public abstract class BaseZone : IZone, IDisposable
 
             entity.StopMoving();
             miniature = ToRoleplayMiniatureStatus(entity);
+            SaveRoleplayMiniatures();
             return true;
         }
     }
@@ -1525,6 +1552,7 @@ public abstract class BaseZone : IZone, IDisposable
 
             miniature = ToRoleplayMiniatureStatus(entity);
             entity.DisposeFromScene();
+            SaveRoleplayMiniatures();
             return true;
         }
     }
@@ -1568,8 +1596,97 @@ public abstract class BaseZone : IZone, IDisposable
             foreach (var miniature in miniatures)
                 miniature.DisposeFromScene();
 
+            SaveRoleplayMiniatures();
             return miniatures.Length;
         }
+    }
+
+    private void RestoreRoleplayMiniatures()
+    {
+        if (_roleplayMiniatureStore is null || OwnerId is not null)
+            return;
+
+        lock (_roleplayMiniatureLock)
+        {
+            var snapshots = _roleplayMiniatureStore.GetForZone(DefinitionId);
+
+            foreach (var snapshot in snapshots)
+            {
+                if (!_resourceManager.Models.TryGetValue(snapshot.ModelId, out var model) ||
+                    !RoleplayMiniatureRules.IsValidName(snapshot.Name) ||
+                    !RoleplayMiniatureRules.TryNormalizeGroup(snapshot.Group, out var normalizedGroup))
+                {
+                    continue;
+                }
+
+                var entity = new RoleplayMiniature(
+                    this,
+                    snapshot.Id,
+                    snapshot.OwnerGuid,
+                    snapshot.OwnerName,
+                    normalizedGroup)
+                {
+                    Guid = GetNpcGuid(null),
+                    Name = snapshot.Name.Trim(),
+                    ModelId = snapshot.ModelId,
+                    Scale = model.Scale == 0f ? 1f : model.Scale,
+                    VerticalOffset = model.NamePlateOffset,
+                    CursorId = 18,
+                    InteractRange = 15,
+                    IsInteractable = true,
+                    Speed = RoleplayMiniatureRules.MovementSpeed,
+                    Visible = true
+                };
+
+                if (!_npcs.TryAdd(entity.Guid, entity))
+                    continue;
+
+                if (!_entities.TryAdd(entity.Guid, entity))
+                {
+                    _npcs.TryRemove(entity.Guid, out _);
+                    continue;
+                }
+
+                entity.UpdatePosition(snapshot.Position, snapshot.Rotation);
+                _nextRoleplayMiniatureId = Math.Max(_nextRoleplayMiniatureId, snapshot.Id + 1);
+            }
+        }
+    }
+
+    private void SaveRoleplayMiniatures(params RoleplayMiniatureStatus[] updates)
+    {
+        if (_roleplayMiniatureStore is null || OwnerId is not null)
+            return;
+
+        var snapshots = _npcs.Values
+            .OfType<RoleplayMiniature>()
+            .Select(miniature =>
+            {
+                var update = updates.FirstOrDefault(candidate => candidate.Id == miniature.InstanceId);
+                return ToRoleplayMiniatureSnapshot(miniature, update?.Position, update?.Rotation);
+            })
+            .ToArray();
+
+        _roleplayMiniatureStore.ReplaceZone(DefinitionId, snapshots);
+    }
+
+    private RoleplayMiniatureSnapshot ToRoleplayMiniatureSnapshot(
+        RoleplayMiniature miniature,
+        Vector4? positionOverride = null,
+        Quaternion? rotationOverride = null)
+    {
+        return new RoleplayMiniatureSnapshot
+        {
+            ZoneDefinitionId = DefinitionId,
+            Id = miniature.InstanceId,
+            ModelId = miniature.ModelId,
+            Name = miniature.Name ?? string.Empty,
+            Group = miniature.Group,
+            OwnerGuid = miniature.OwnerGuid,
+            OwnerName = miniature.OwnerName,
+            Position = positionOverride ?? miniature.Position,
+            Rotation = rotationOverride ?? miniature.Rotation
+        };
     }
 
     private IEnumerable<RoleplayMiniature> FindNearbyRoleplayMiniatures(Vector4 position, float radius)
@@ -1599,7 +1716,8 @@ public abstract class BaseZone : IZone, IDisposable
             miniature.Group,
             miniature.OwnerGuid,
             miniature.OwnerName,
-            miniature.Position);
+            miniature.Position,
+            miniature.Rotation);
     }
 
     public bool TryCreateMount(Player rider, MountDefinition definition, [MaybeNullWhen(false)] out Mount mount)
@@ -1664,7 +1782,9 @@ public abstract class BaseZone : IZone, IDisposable
             {
                 var tileHash = ZoneTile.GetHash(longitude, latitude);
 
-                tiles.Add(tileHash, new ZoneTile(longitude, latitude));
+                var environmentId = _zoneEnvironment?.GetEnvironmentId(longitude, latitude) ?? default;
+
+                tiles.Add(tileHash, new ZoneTile(longitude, latitude, environmentId));
             }
         }
 
@@ -1691,6 +1811,25 @@ public abstract class BaseZone : IZone, IDisposable
         }
 
         return tiles;
+    }
+
+    public bool HasEnvironmentData => _zoneEnvironment is not null;
+
+    public bool IsOutOfBounds(ZoneTile zoneTile)
+    {
+        return _zoneEnvironment is not null && (zoneTile == ZoneTile.Empty || zoneTile.IsOutOfBounds);
+    }
+
+    public bool IsOutOfBounds(Vector4 position)
+    {
+        return IsOutOfBounds(GetTileFromPosition(position));
+    }
+
+    private static DtQueryDefaultFilter CreateNavMeshFilter(NavMeshPolyFlags includeFlags)
+    {
+        var filter = new DtQueryDefaultFilter();
+        filter.SetIncludeFlags((int)includeFlags);
+        return filter;
     }
 
     public ZoneTile GetTileFromPosition(Vector4 position)
@@ -1737,6 +1876,11 @@ public abstract class BaseZone : IZone, IDisposable
 
     private void AddEntityToZoneTiles(IEntity entity, IEnumerable<ZoneTile> zoneTiles)
     {
+        if (entity is Npc { TracksVisibleNpcs: false } playerObserver)
+        {
+            UpdateNpcPlayerVisibility(playerObserver, zoneTiles, adding: true);
+            return;
+        }
         var npcsToAdd = new List<Npc>();
         var playersToAdd = new List<Player>();
         foreach (var zoneTile in zoneTiles)
@@ -1806,6 +1950,11 @@ public abstract class BaseZone : IZone, IDisposable
 
     private void RemoveEntityFromZoneTiles(IEntity entity, IEnumerable<ZoneTile> zoneTiles)
     {
+        if (entity is Npc { TracksVisibleNpcs: false } playerObserver)
+        {
+            UpdateNpcPlayerVisibility(playerObserver, zoneTiles, adding: false);
+            return;
+        }
         var npcsToRemove = new List<Npc>();
         var playersToRemove = new List<Player>();
 
@@ -1877,6 +2026,35 @@ public abstract class BaseZone : IZone, IDisposable
         entity.OnRemoveVisiblePlayers(playersToRemove);
     }
 
+    private void UpdateNpcPlayerVisibility(Npc npc, IEnumerable<ZoneTile> zoneTiles, bool adding)
+    {
+        // Furniture only observes players, so do not scan every nearby decoration on each placement.
+        if (_players.IsEmpty)
+            return;
+        var tiles = zoneTiles.ToHashSet();
+        if (tiles.Count == 0)
+            return;
+        var players = new List<Player>();
+        foreach (var pair in _players)
+        {
+            var player = pair.Value;
+            if (!player.Visible || !tiles.Contains(player.ZoneTile))
+                continue;
+            players.Add(player);
+            if (npc.Visible)
+            {
+                if (adding)
+                    player.OnAddVisibleNpcs(npc);
+                else
+                    player.OnRemoveVisibleNpcs(npc);
+            }
+        }
+        if (adding)
+            npc.OnAddVisiblePlayers(players);
+        else
+            npc.OnRemoveVisiblePlayers(players);
+    }
+
     #endregion
 
     #region Update
@@ -1888,6 +2066,8 @@ public abstract class BaseZone : IZone, IDisposable
             try
             {
                 ProcessCollectionNodeRefills();
+
+                Routines.OnTick();
 
                 foreach (var entity in _entities)
                 {
@@ -1956,19 +2136,18 @@ public abstract class BaseZone : IZone, IDisposable
 
     private ulong GetNpcGuid(ulong? guid)
     {
+        var instanceId = OwnerId is null ? GuidHelper.OpenWorldInstanceId : GuidHelper.GetNpcInstanceId((ulong)Id);
+
+        if (guid.HasValue)
+            return GuidHelper.GetNpcGuid(GuidHelper.GetNpcCounter(guid.Value), instanceId);
+
         lock (_npcGuidLock)
         {
-            if (guid.HasValue)
-            {
-                _nextNpcGuid = Math.Max(_nextNpcGuid, guid.Value + 1);
-                return guid.Value;
-            }
-
-            return _nextNpcGuid++;
+            return GuidHelper.GetNpcGuid(_nextNpcCounter++, instanceId);
         }
     }
 
-    public void Dispose()
+    public virtual void Dispose()
     {
         _cancellationTokenSource.Cancel();
 
@@ -1976,6 +2155,8 @@ public abstract class BaseZone : IZone, IDisposable
         _updateEverySecondTimer.Dispose();
 
         Task.WaitAll(_updateEveryTickTask, _updateEverySecondTask);
+
+        Routines.CancelAll();
 
         lock (_collectionNodeLock)
             _collectionNodeRefills.Clear();

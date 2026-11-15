@@ -77,6 +77,32 @@ public sealed class CollectionVolunteerStoreTests
     }
 
     [TestMethod]
+    public void AddHonorsConfiguredPendingLimit()
+    {
+        var storagePath = Path.Combine(_temporaryDirectory, "limited.json");
+        WritePendingPlacement(storagePath, userId: 1);
+        var store = new CollectionVolunteerStore(storagePath, maximumPendingPerUser: 1);
+
+        var result = store.TryAdd(CreatePlacement(1, 20, "rare-mushrooms"), out var stored);
+
+        Assert.AreEqual(CollectionVolunteerAddResult.PendingLimitReached, result);
+        Assert.IsNull(stored);
+    }
+
+    [TestMethod]
+    public void ZeroPendingLimitAllowsAdditionalPlacements()
+    {
+        var storagePath = Path.Combine(_temporaryDirectory, "unlimited.json");
+        WritePendingPlacement(storagePath, userId: 1);
+        var store = new CollectionVolunteerStore(storagePath, maximumPendingPerUser: 0);
+
+        var result = store.TryAdd(CreatePlacement(1, 20, "rare-mushrooms"), out var stored);
+
+        Assert.AreEqual(CollectionVolunteerAddResult.Success, result);
+        Assert.IsNotNull(stored);
+    }
+
+    [TestMethod]
     public void ReviewLocksPlacementFromContributorEdits()
     {
         _store.TryAdd(CreatePlacement(1, 10, "mushrooms"), out var stored);
@@ -206,5 +232,13 @@ public sealed class CollectionVolunteerStoreTests
             SubmittedByCharacterName = $"Tester {characterId}",
             Status = CollectionVolunteerPlacementStatus.Pending
         };
+    }
+
+    private static void WritePendingPlacement(string storagePath, ulong userId)
+    {
+        var placement = CreatePlacement(userId, 10, "mushrooms");
+        placement.Id = 1;
+        placement.SubmittedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+        File.WriteAllText(storagePath, JsonSerializer.Serialize(new[] { placement }));
     }
 }

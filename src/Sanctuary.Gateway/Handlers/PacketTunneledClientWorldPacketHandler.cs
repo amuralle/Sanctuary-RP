@@ -39,6 +39,7 @@ public static class PacketTunneledClientWorldPacketHandler
 
         var handled = opCode switch
         {
+            BaseTradePacket.OpCode => BaseTradePacketHandler.HandlePacket(connection, reader),
             BaseCommandPacket.OpCode => BaseCommandPacketHandler.HandlePacket(connection, reader),
             PacketWorldTeleportRequest.OpCode => PacketWorldTeleportRequestHandler.HandlePacket(connection, packetTunneledClientWorldPacket.Payload),
             PacketBaseInGamePurchase.OpCode => PacketBaseInGamePurchaseHandler.HandlePacket(connection, reader),
@@ -46,10 +47,12 @@ public static class PacketTunneledClientWorldPacketHandler
             PacketSetLocale.OpCode => PacketSetLocaleHandler.HandlePacket(connection, packetTunneledClientWorldPacket.Payload),
             BaseLobbyGameDefinitionPacket.OpCode => BaseLobbyGameDefinitionPacketHandler.HandlePacket(connection, reader),
             BaseHousingPacket.OpCode => BaseHousingPacketHandler.HandlePacket(connection, reader),
+            BaseRatingPacket.OpCode => BaseRatingPacketHandler.HandlePacket(connection, reader),
             BaseGuildPacket.OpCode => BaseGuildPacketHandler.HandlePacket(connection, reader),
             PacketAddClientPortraitCrc.OpCode => PacketAddClientPortraitCrcHandler.HandlePacket(connection, packetTunneledClientWorldPacket.Payload),
             BaseFotomatPacket.OpCode => BaseFotomatPacketHandler.HandlePacket(connection, reader),
             WallOfDataBasePacket.OpCode => WallOfDataBasePacketHandler.HandlePacket(connection, reader),
+            PacketClientLuaMetrics.OpCode => PacketClientLuaMetricsHandler.HandlePacket(connection, packetTunneledClientWorldPacket.Payload),
             _ => false
         };
 

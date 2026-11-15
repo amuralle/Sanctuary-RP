@@ -883,8 +883,8 @@ def add_quick_start(story, styles, commands):
     story.append(Spacer(1, 0.14 * inch))
     story.append(
         Paragraph(
-            "Safety limits: each player may place up to 40 miniatures in a zone, each zone may "
-            "contain up to 200, and placements have a short cooldown. Remove and clear commands "
+            "Safety limits: each player may place up to 500 miniatures in a zone, each zone may "
+            "contain up to 2,000, and placements have a short cooldown. Remove and clear commands "
             "only affect player-created roleplay miniatures, never normal world NPCs.",
             styles["body"],
         )

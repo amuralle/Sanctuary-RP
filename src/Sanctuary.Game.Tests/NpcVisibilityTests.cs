@@ -10,9 +10,10 @@ public sealed class NpcVisibilityTests
     [TestMethod]
     public void OnAddVisiblePlayers_ReplacesPreviousSessionWithSameGuid()
     {
-        var npc = new Npc(null!);
-        var previousSession = new Player(null!, null!, null!, null!) { Guid = 17 };
-        var currentSession = new Player(null!, null!, null!, null!) { Guid = 17 };
+        using var zone = TestZone.Create();
+        var npc = new Npc(zone);
+        var previousSession = new Player(zone, null!, null!, null!) { Guid = 17 };
+        var currentSession = new Player(zone, null!, null!, null!) { Guid = 17 };
 
         npc.OnAddVisiblePlayers(previousSession);
         npc.OnAddVisiblePlayers(currentSession);
@@ -23,9 +24,10 @@ public sealed class NpcVisibilityTests
     [TestMethod]
     public void OnRemoveVisiblePlayers_DoesNotRemoveReplacementSessionWithSameGuid()
     {
-        var npc = new Npc(null!);
-        var previousSession = new Player(null!, null!, null!, null!) { Guid = 17 };
-        var currentSession = new Player(null!, null!, null!, null!) { Guid = 17 };
+        using var zone = TestZone.Create();
+        var npc = new Npc(zone);
+        var previousSession = new Player(zone, null!, null!, null!) { Guid = 17 };
+        var currentSession = new Player(zone, null!, null!, null!) { Guid = 17 };
 
         npc.OnAddVisiblePlayers(previousSession);
         npc.OnAddVisiblePlayers(currentSession);

@@ -12,8 +12,10 @@ using NLog.Extensions.Logging;
 using Sanctuary.Core.CollectionVolunteers;
 using Sanctuary.Core.Configuration;
 using Sanctuary.Core.Extensions;
+using Sanctuary.Core.RoleplayMiniatures;
 using Sanctuary.Database;
 using Sanctuary.Game;
+using Sanctuary.Game.Quests;
 using Sanctuary.Gateway;
 using Sanctuary.Scripting;
 using Sanctuary.UdpLibrary.Configuration;
@@ -58,7 +60,12 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
     var collectionVolunteerStoragePath = hostBuilderContext.Configuration[
         "CollectionVolunteers:StoragePath"] ?? Path.Combine(
             "Data", "CollectionVolunteers", "placements.json");
-    serviceCollection.AddSingleton(new CollectionVolunteerStore(collectionVolunteerStoragePath));
+    var maximumPendingPlacements = hostBuilderContext.Configuration.GetValue<int?>(
+        "CollectionVolunteers:MaximumPendingPerUser") ?? CollectionVolunteerStore.DefaultMaximumPendingPerUser;
+    serviceCollection.AddSingleton(new CollectionVolunteerStore(collectionVolunteerStoragePath, maximumPendingPlacements));
+    var miniatureStoragePath = hostBuilderContext.Configuration["RoleplayMiniatures:StoragePath"]
+        ?? Path.Combine("Data", "RoleplayMiniatures", "snapshots.json");
+    serviceCollection.AddSingleton(new RoleplayMiniatureStore(miniatureStoragePath));
 
     // Server Options
     var serverOptions = hostBuilderContext.Configuration.GetSection(ServerOptions.Section).Get<GatewayServerOptions>();
@@ -107,8 +114,12 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
     serviceCollection.AddSingleton<IResourceManager, ResourceManager>();
     serviceCollection.AddSingleton<IScriptManager, ScriptManager>();
     serviceCollection.AddSingleton<IInteractionManager, InteractionManager>();
+    serviceCollection.AddSingleton<ITradeSettlement, TradeSettlement>();
+    serviceCollection.AddSingleton<TradeManager>();
     serviceCollection.AddSingleton<IChatCommandManager, ChatCommandManager>();
+    serviceCollection.AddSingleton<IQuestManager, QuestManager>();
     serviceCollection.AddSingleton<IRewardManager, RewardManager>();
+    serviceCollection.AddSingleton<HousingFixtureManager>();
 });
 
 builder.ConfigureLogging((hostBuilderContext, loggingBuilder) =>

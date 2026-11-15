@@ -286,6 +286,78 @@ h3 {
   white-space: nowrap;
 }
 
+.volunteer-command-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.volunteer-command-action .secondary-button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding-block: 7px;
+}
+
+.volunteer-command-action .secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.placement-gap-panel {
+  margin-bottom: 22px;
+  padding: 16px 18px;
+  display: grid;
+  grid-template-columns: minmax(220px, 0.4fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+  border: 1px solid var(--line);
+  background: var(--white);
+}
+
+.placement-gap-panel h3,
+.placement-gap-panel p {
+  margin-bottom: 0;
+}
+
+.placement-gap-panel p {
+  color: var(--muted);
+}
+
+.placement-gap-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.placement-gap-chip {
+  min-height: 32px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  background: #f7faf9;
+  color: var(--navy);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.placement-gap-chip.empty {
+  border-color: #d5793b;
+  background: #fff1e7;
+}
+
+.placement-gap-chip.low {
+  border-color: #d6a730;
+  background: #fff8db;
+}
+
+.placement-gap-chip.healthy {
+  border-color: #74a66f;
+  background: #edf7ed;
+  cursor: default;
+}
+
 .collection-map-layout {
   display: grid;
   grid-template-columns: minmax(320px, 0.8fr) minmax(560px, 1.4fr);
@@ -472,6 +544,16 @@ h3 {
 .map-empty {
   fill: var(--muted);
   font-size: 18px;
+  font-weight: 700;
+}
+
+.map-outlier-ribbon rect {
+  fill: rgba(10, 26, 29, 0.86);
+}
+
+.map-outlier-ribbon text {
+  fill: var(--white);
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -1185,6 +1267,12 @@ code {
     max-width: 100%;
     white-space: normal;
     overflow-wrap: anywhere;
+  }
+
+  .volunteer-command-action {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .collection-command-list > div,
