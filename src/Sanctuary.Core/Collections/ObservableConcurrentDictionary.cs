@@ -13,7 +13,7 @@ namespace Sanctuary.Core.Collections;
 public class ObservableConcurrentDictionary<TKey, TValue> : IDictionary<TKey, TValue>, INotifyCollectionChanged, INotifyPropertyChanged where TKey : notnull
 {
     private readonly SynchronizationContext _context;
-    private readonly ConcurrentDictionary<TKey, TValue> _dictionary;
+    private volatile ConcurrentDictionary<TKey, TValue> _dictionary;
 
     /// <summary>
     /// Initializes an instance of the ObservableConcurrentDictionary class.
@@ -89,6 +89,14 @@ public class ObservableConcurrentDictionary<TKey, TValue> : IDictionary<TKey, TV
     private void UpdateWithNotification(TKey key, TValue value)
     {
         _dictionary[key] = value;
+        NotifyObserversOfChange();
+    }
+
+    protected void ReplaceAll(IEnumerable<KeyValuePair<TKey, TValue>> entries)
+    {
+        // Build before publishing so reload readers see either complete catalog, never a partial one.
+        var replacement = new ConcurrentDictionary<TKey, TValue>(entries);
+        _dictionary = replacement;
         NotifyObserversOfChange();
     }
 

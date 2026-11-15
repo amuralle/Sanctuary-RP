@@ -45,6 +45,7 @@
   </Folder>
   <Folder Name="/Servers/">
     <Project Path="Sanctuary.Gateway/Sanctuary.Gateway.csproj" />
+    <Project Path="Sanctuary.Gateway.Tests/Sanctuary.Gateway.Tests.csproj" />
     <Project Path="Sanctuary.Login/Sanctuary.Login.csproj" />
   </Folder>
   <Project Path="Sanctuary.Core/Sanctuary.Core.csproj" />

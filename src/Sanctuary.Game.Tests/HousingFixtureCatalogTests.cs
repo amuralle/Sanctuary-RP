@@ -67,6 +67,45 @@ public sealed class HousingFixtureCatalogTests
             Assert.AreEqual(item.Id, client.ItemDefinitionId);
             Assert.AreEqual(fixture.ModelId, client.ModelId);
         }
+
+        foreach (var item in items.Values.Where(item => item.Type == 29))
+            Assert.IsTrue(fixtures.ContainsKey(item.Id), $"Furniture {item.Id} of {item.ModelName} cannot be placed.");
+    }
+
+    [TestMethod]
+    public void SupportedFurniture_HasUsableExistingCoinAndMarketplaceOffers()
+    {
+        var path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../Resources"));
+        var fixtures = new HousingFixtureDefinitionCollection(NullLogger.Instance);
+        var items = new ClientItemDefinitionCollection(NullLogger.Instance);
+        var coins = new CoinStoreItemCollection(NullLogger.Instance);
+        var stores = new StoreDefinitionCollection(NullLogger.Instance);
+        Assert.IsTrue(fixtures.Load(Path.Combine(path, "HousingFixtures.json")));
+        Assert.IsTrue(items.Load(Path.Combine(path, "ClientItemDefinitions.json")));
+        Assert.IsTrue(coins.Load(Path.Combine(path, "CoinStoreItems.json")));
+        Assert.IsTrue(stores.Load(Path.Combine(path, "Stores.json")));
+        Assert.IsTrue(stores.LoadBundles(Path.Combine(path, "StoreBundles.json")));
+        var coinOffers = coins.Values.Where(offer => !offer.BuyDisabled && !offer.Hidden && fixtures.ContainsKey(offer.Id)).ToList();
+        Assert.IsTrue(coinOffers.Count > 0);
+        foreach (var offer in coinOffers)
+        {
+            Assert.IsTrue(items[offer.Id].Cost > 0, $"Unpriced furniture {offer.Id} must not be sold for coins.");
+            Assert.IsTrue(items[offer.Id].GetMemberPurchasePrice() >= 0);
+        }
+        foreach (var item in items.Values.Where(item => item.Type == 29 && item.Cost > 0))
+        {
+            Assert.IsTrue(coins.TryGetValue(item.Id, out var offer), $"Priced furniture {item.Id} has no coin offer.");
+            Assert.AreEqual(item.CategoryId, offer.CategoryId, $"Furniture {item.Id} lost its configured shop category.");
+            Assert.IsFalse(offer.Hidden || offer.BuyDisabled, $"Priced furniture {item.Id} is not buyable.");
+        }
+        var marketplaceOffers = stores.Values.SelectMany(store => store.Bundles.Values)
+            .Where(offer => offer.Entries.Any(entry => fixtures.ContainsKey(entry.MarketingItemId))).ToList();
+        Assert.IsTrue(marketplaceOffers.Count > 0);
+        foreach (var offer in marketplaceOffers)
+        {
+            Assert.IsTrue(offer.Price >= 0 && offer.MemberDiscount >= 0);
+            Assert.IsTrue(offer.Entries.All(entry => entry.Quantity > 0 && items.ContainsKey(entry.MarketingItemId)));
+        }
     }
 
     [TestMethod]

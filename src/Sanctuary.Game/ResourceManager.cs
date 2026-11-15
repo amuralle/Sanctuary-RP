@@ -351,17 +351,8 @@ public class ResourceManager : IResourceManager, IDisposable
         if (!Houses.Load(HousesFile))
             return false;
 
-        if (!HousingFixtures.Load(HousingFixturesFile))
+        if (!LoadHousingFixtures(HousingFixturesFile))
             return false;
-
-        foreach (var fixture in HousingFixtures.Values)
-        {
-            if (!ClientItemDefinitions.ContainsKey(fixture.ItemDefinitionId) || !Models.ContainsKey(fixture.ModelId))
-            {
-                _logger.LogError("Housing fixture {item} references an unknown item or model.", fixture.ItemDefinitionId);
-                return false;
-            }
-        }
 
         if (!Pets.Load(PetsFile))
             return false;
@@ -435,6 +426,12 @@ public class ResourceManager : IResourceManager, IDisposable
 
     public bool LoadNavMeshes() => NavMeshes.Load(NavMeshDirectory);
 
+    public bool LoadHousingFixtures(string filePath) => HousingFixtures.Load(filePath, fixture =>
+        ClientItemDefinitions.TryGetValue(fixture.ItemDefinitionId, out var item) && item.Type == 29
+        && !string.IsNullOrWhiteSpace(item.ModelName)
+        && Models.TryGetValue(fixture.ModelId, out var model)
+        && string.Equals(item.ModelName, model.ModelFileName, StringComparison.OrdinalIgnoreCase));
+
     private void _fileSystemWatcher_Changed(object sender, FileSystemEventArgs e)
     {
         if (e.FullPath.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase) || !File.Exists(e.FullPath))
@@ -504,7 +501,7 @@ public class ResourceManager : IResourceManager, IDisposable
             else if (e.FullPath == HousesFile)
                 loaded = Houses.Load(HousesFile);
             else if (e.FullPath == HousingFixturesFile)
-                loaded = HousingFixtures.Load(HousingFixturesFile);
+                loaded = LoadHousingFixtures(HousingFixturesFile);
             else if (e.FullPath == PetsFile)
                 loaded = Pets.Load(PetsFile);
             else if (e.FullPath == MountsFile)

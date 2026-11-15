@@ -281,14 +281,20 @@ public sealed class HousingZone : BaseZone
         }
     }
 
+    public void RefreshFixtureItems(Player player)
+    {
+        lock (_fixtureLock)
+        {
+            if (!_disposed && player.Zone == this && IsOwner(player))
+                SendFixtureItems(player);
+        }
+    }
+
     private void SendFixtureItems(Player player)
     {
-        player.SendTunneled(new HousingPacketFixtureItemList
-        {
-            Infos = IsOwner(player) ? player.Items.Where(item => item.Count > 0 && _resourceManager.HousingFixtures.ContainsKey(item.Definition))
-                .Select(item => new FixtureInstanceInfo { FixtureGuid = (ulong)item.Id, ItemDefinitionId = item.Definition }).ToList() : [],
-            Definitions = _resourceManager.HousingFixtures.Values.Select(definition => definition.CreateClientDefinition()).ToList()
-        });
+        var ownedItems = IsOwner(player) ? player.Items.ToArray() : [];
+        player.SendTunneled(_fixtures.CreateItemList(ownedItems,
+            _fixtureActors.Values.Select(actor => actor.ItemDefinitionId)));
     }
 
     public void SetHouseName(string houseName) => UpdateHouse(dbHouse => dbHouse.Name = houseName);

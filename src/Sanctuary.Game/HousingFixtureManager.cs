@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Data.Common;
+using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -12,6 +14,7 @@ using Sanctuary.Core.Helpers;
 using Sanctuary.Database;
 using Sanctuary.Database.Entities;
 using Sanctuary.Game.Helpers;
+using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
 
 namespace Sanctuary.Game;
@@ -20,6 +23,24 @@ public sealed class HousingFixtureManager(IResourceManager resources, IDbContext
     ILogger<HousingFixtureManager> logger)
 {
     public const int MaxFixtureCount = 9999;
+    private const int SlowWriteWarningMilliseconds = 250;
+
+    public HousingPacketFixtureItemList CreateItemList(IEnumerable<ClientItem> inventory, IEnumerable<int> placedDefinitions)
+    {
+        var items = inventory.ToArray();
+        // Packet 43 replaces the client's definition cache (00ac9bd0/00abf760), so keep a
+        // complete relevant snapshot, including placed-only items whose available count is zero.
+        var needed = items.Select(item => item.Definition).Concat(placedDefinitions).ToHashSet();
+        var definitions = resources.HousingFixtures.Values.Where(definition => needed.Contains(definition.ItemDefinitionId))
+            .OrderBy(definition => definition.ItemDefinitionId).ToList();
+        var supported = definitions.Select(definition => definition.ItemDefinitionId).ToHashSet();
+        return new HousingPacketFixtureItemList
+        {
+            Infos = items.Where(item => item.Count > 0 && supported.Contains(item.Definition))
+                .Select(item => new FixtureInstanceInfo { FixtureGuid = (ulong)item.Id, ItemDefinitionId = item.Definition }).ToList(),
+            Definitions = definitions.Select(definition => definition.CreateClientDefinition()).ToList()
+        };
+    }
 
     public List<DbHouseFixture> GetFixtures(ulong characterId, ulong houseId)
     {
@@ -123,7 +144,7 @@ public sealed class HousingFixtureManager(IResourceManager resources, IDbContext
         if (!GuidHelper.IsFixtureGuid(fixtureGuid))
             return false;
         var fixtureId = GuidHelper.GetFixtureId(fixtureGuid);
-
+        var started = Stopwatch.GetTimestamp();
         try
         {
             using var db = factory.CreateDbContext();
@@ -141,6 +162,10 @@ public sealed class HousingFixtureManager(IResourceManager resources, IDbContext
         {
             logger.LogError(ex, "Could not move fixture {fixture} in house {house}.", fixtureGuid, houseId);
             return false;
+        }
+        finally
+        {
+            LogSlowWrite(nameof(TryMove), started);
         }
     }
 
@@ -195,14 +220,29 @@ public sealed class HousingFixtureManager(IResourceManager resources, IDbContext
         }
     }
 
-    private T Execute<T>(Func<DatabaseContext, T> operation)
+    private T Execute<T>(Func<DatabaseContext, T> operation, [CallerMemberName] string operationName = "")
     {
-        using var context = factory.CreateDbContext();
-        return context.Database.CreateExecutionStrategy().Execute(() =>
+        var started = Stopwatch.GetTimestamp();
+        try
         {
-            using var attempt = factory.CreateDbContext();
-            return operation(attempt);
-        });
+            using var context = factory.CreateDbContext();
+            return context.Database.CreateExecutionStrategy().Execute(() =>
+            {
+                using var attempt = factory.CreateDbContext();
+                return operation(attempt);
+            });
+        }
+        finally
+        {
+            LogSlowWrite(operationName, started);
+        }
+    }
+
+    private void LogSlowWrite(string operation, long started)
+    {
+        var elapsed = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+        if (elapsed >= SlowWriteWarningMilliseconds)
+            logger.LogWarning("Housing persistence {operation} took {elapsed:F0} ms; the editor lock may be waiting on the database.", operation, elapsed);
     }
 
     public static FixtureInstance CreateClientInstance(DbHouseFixture fixture, ulong houseGuid, ulong npcGuid) => new()

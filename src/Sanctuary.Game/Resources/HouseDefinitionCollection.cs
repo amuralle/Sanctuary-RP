@@ -54,9 +54,7 @@ public class HouseDefinitionCollection : ObservableConcurrentDictionary<int, Hou
             }
 
             // Validate before replacing the catalog; bit 30 is reserved by housing instance keys.
-            Clear();
-            foreach (var entry in entries)
-                TryAdd(entry.Id, entry);
+            ReplaceAll(entries.Select(entry => new KeyValuePair<int, HouseDefinition>(entry.Id, entry)));
         }
         catch (Exception ex)
         {

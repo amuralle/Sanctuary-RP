@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Data.Common;
 using System.Diagnostics;
 using System.IO;
@@ -11,6 +12,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -19,6 +21,7 @@ using Sanctuary.Database;
 using Sanctuary.Database.Entities;
 using Sanctuary.Database.Sqlite;
 using Sanctuary.Game.Resources.Definitions;
+using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
 
 namespace Sanctuary.Game.Tests;
@@ -72,6 +75,82 @@ public sealed class HousingFixtureManagerTests
     {
         _resources.Dispose();
         File.Delete(_path);
+    }
+
+    [TestMethod]
+    public void FurnitureBrowser_OnlyIncludesRelevantDefinitionsAndAvailableInventoryRows()
+    {
+        _resources.HousingFixtures.Add(36137, new HousingFixtureDefinition { ItemDefinitionId = 36137, ModelId = 2 });
+        _resources.HousingFixtures.Add(36142, new HousingFixtureDefinition { ItemDefinitionId = 36142, ModelId = 3 });
+        var packet = _manager.CreateItemList(
+        [
+            new ClientItem { Id = 1, Definition = 27943, Count = 0 },
+            new ClientItem { Id = 2, Definition = 36137, Count = 2 },
+            new ClientItem { Id = 3, Definition = 36137, Count = 1 },
+            new ClientItem { Id = 4, Definition = 999999, Count = 1 }
+        ], [27943]);
+        CollectionAssert.AreEqual(new[] { 27943, 36137 }, packet.Definitions.Select(definition => definition.Id).ToArray());
+        CollectionAssert.AreEquivalent(new ulong[] { 2, 3 }, packet.Infos.Select(info => info.FixtureGuid).ToArray());
+    }
+
+    [TestMethod]
+    public void FurnitureBrowser_VisitorsReceivePlacedDefinitionsWithoutAnOwnerInventory()
+    {
+        var packet = _manager.CreateItemList([], [27943]);
+        Assert.AreEqual(0, packet.Infos.Count);
+        Assert.AreEqual(27943, packet.Definitions.Single().ItemDefinitionId);
+    }
+
+    [TestMethod]
+    public void FurnitureBrowser_ReplacementsRemoveExhaustedRowsAndRestorePickedUpItems()
+    {
+        var inventory = new[] { new ClientItem { Id = 1, Definition = 27943, Count = 1 } };
+        Assert.AreEqual(1, _manager.CreateItemList(inventory, []).Infos.Count);
+        inventory[0].Count = 0;
+        var placed = _manager.CreateItemList(inventory, [27943]);
+        Assert.AreEqual(0, placed.Infos.Count);
+        Assert.AreEqual(1, placed.Definitions.Count);
+        inventory[0].Count = 1;
+        Assert.AreEqual(1, _manager.CreateItemList(inventory, []).Infos.Count);
+        var empty = _manager.CreateItemList([], []);
+        Assert.AreEqual(0, empty.Definitions.Count);
+        Assert.AreEqual(0, empty.Infos.Count);
+    }
+
+    [TestMethod]
+    public void FurnitureBrowser_LargeCatalogDoesNotResendUnrelatedDefinitionsOrQueryTheDatabase()
+    {
+        var path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../Resources/HousingFixtures.json"));
+        Assert.IsTrue(_resources.HousingFixtures.Load(path));
+        var full = new HousingPacketFixtureItemList
+        {
+            Definitions = _resources.HousingFixtures.Values.Select(definition => definition.CreateClientDefinition()).ToList()
+        };
+        _commands.Commands.Clear();
+        var relevant = _manager.CreateItemList([new ClientItem { Id = 1, Definition = 27943, Count = 1 }], []);
+        var fullBytes = full.Serialize().Length;
+        var relevantBytes = relevant.Serialize().Length;
+        Assert.AreEqual(1, relevant.Definitions.Count);
+        Assert.IsTrue(relevantBytes < fullBytes / 100);
+        Assert.AreEqual(0, _commands.Commands.Count);
+        TestContext.WriteLine($"Full furniture catalog: {fullBytes:N0} bytes; one-chair replacement: {relevantBytes:N0} bytes. No database queries.");
+    }
+
+    [TestMethod]
+    public void SlowPersistence_LogsTheDelayWithoutDroppingOrDuplicatingThePlacement()
+    {
+        var log = new RecordingLogger();
+        var manager = new HousingFixtureManager(_resources, _factory, log);
+        _commands.BeforeCommand = command =>
+        {
+            if (command.CommandText.StartsWith("INSERT INTO \"HouseFixtures\"", StringComparison.Ordinal))
+                Thread.Sleep(300);
+        };
+        Assert.IsTrue(manager.TryPlace(_characterId, 100, 1, Position, default, 1, out _, out _));
+        Assert.IsTrue(log.Warnings.Any(message => message.Contains(nameof(HousingFixtureManager.TryPlace), StringComparison.Ordinal)));
+        using var db = _factory.CreateDbContext();
+        Assert.AreEqual(0, db.Items.Single().Count);
+        Assert.AreEqual(1, db.HouseFixtures.Count());
     }
 
     [TestMethod]
@@ -393,12 +472,27 @@ public sealed class HousingFixtureManagerTests
     private sealed class CommandLog : DbCommandInterceptor
     {
         public ConcurrentQueue<string> Commands { get; } = new();
+        public Action<DbCommand>? BeforeCommand { get; set; }
 
         public override InterceptionResult<DbDataReader> ReaderExecuting(DbCommand command, CommandEventData eventData,
             InterceptionResult<DbDataReader> result)
         {
             Commands.Enqueue(command.CommandText);
+            BeforeCommand?.Invoke(command);
             return result;
+        }
+    }
+
+    private sealed class RecordingLogger : ILogger<HousingFixtureManager>
+    {
+        public List<string> Warnings { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Warning)
+                Warnings.Add(formatter(state, exception));
         }
     }
 

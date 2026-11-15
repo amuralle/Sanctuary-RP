@@ -14,6 +14,7 @@ namespace Sanctuary.Game.Entities;
 public sealed class HousingFixtureNpc : Npc
 {
     private Quaternion _fixtureRotation;
+    public int ItemDefinitionId { get; }
     public override bool TracksVisibleNpcs => false;
 
     public HousingFixtureNpc(IZone zone, ulong guid, DbHouseFixture fixture, HousingFixtureDefinition definition,
@@ -21,6 +22,7 @@ public sealed class HousingFixtureNpc : Npc
     {
         ArgumentOutOfRangeException.ThrowIfZero(guid);
         Guid = guid;
+        ItemDefinitionId = fixture.ItemDefinitionId;
         ModelId = definition.ModelId;
         NameId = item.NameId;
         TextureAlias = item.TextureAlias;

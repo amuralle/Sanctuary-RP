@@ -13,7 +13,7 @@ namespace Sanctuary.Game.Resources;
 
 public sealed class HousingFixtureDefinitionCollection(ILogger logger) : ObservableConcurrentDictionary<int, HousingFixtureDefinition>
 {
-    public bool Load(string filePath)
+    public bool Load(string filePath, Func<HousingFixtureDefinition, bool>? validate = null)
     {
         try
         {
@@ -23,9 +23,13 @@ public sealed class HousingFixtureDefinitionCollection(ILogger logger) : Observa
                 || entries.Select(entry => entry.ItemDefinitionId).Distinct().Count() != entries.Count)
                 return false;
 
-            Clear();
-            foreach (var entry in entries)
-                TryAdd(entry.ItemDefinitionId, entry);
+            if (validate is not null && !entries.All(validate))
+            {
+                logger.LogError("Housing fixtures in {file} reference invalid item or model definitions.", filePath);
+                return false;
+            }
+
+            ReplaceAll(entries.Select(entry => new KeyValuePair<int, HousingFixtureDefinition>(entry.ItemDefinitionId, entry)));
             return true;
         }
         catch (Exception ex)
