@@ -22,6 +22,7 @@ using Sanctuary.WebAPI.Options;
 using Sanctuary.WebAPI.Services;
 
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Formats.Webp;
@@ -38,6 +39,13 @@ public static class ModelCatalogEndpoints
     public const string LoginRateLimitPolicy = "catalog-login";
 
     private static ILogger _logger = null!;
+
+    // Do not probe unsupported decoders before checking the detected format.
+    private static readonly DecoderOptions UploadDecoderOptions = new()
+    {
+        Configuration = new Configuration(
+            new JpegConfigurationModule(), new PngConfigurationModule(), new WebpConfigurationModule())
+    };
 
     public static void MapModelCatalogEndpoints(this WebApplication app)
     {
@@ -225,7 +233,7 @@ public static class ModelCatalogEndpoints
         try
         {
             await using var identifyStream = file.OpenReadStream();
-            var imageInfo = await Image.IdentifyAsync(identifyStream, cancellationToken);
+            var imageInfo = await Image.IdentifyAsync(UploadDecoderOptions, identifyStream, cancellationToken);
 
             if (imageInfo is null)
                 return NormalizedImage.Failed("The file is not a readable image.");
@@ -238,7 +246,7 @@ public static class ModelCatalogEndpoints
                 return NormalizedImage.Failed("The image dimensions are too large.");
 
             await using var imageStream = file.OpenReadStream();
-            using var image = await Image.LoadAsync<Rgba32>(imageStream, cancellationToken);
+            using var image = await Image.LoadAsync<Rgba32>(UploadDecoderOptions, imageStream, cancellationToken);
 
             image.Mutate(operation => operation.AutoOrient());
 
